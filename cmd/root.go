@@ -16,6 +16,7 @@ import (
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/run"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/status"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/version"
+	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/cmd/process"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -65,6 +66,11 @@ func init() {
 	rootCmd.AddCommand(run.NewCmdRun())
 	rootCmd.AddCommand(status.NewCmdStatus())
 	rootCmd.AddCommand(version.NewCmdVersion())
+
+	// introduce two new commands
+	// report: will use results as a backend to apply OPCT rules to filter flakies
+	rootCmd.AddCommand(process.NewCmdProcess())
+	// submit: ??
 
 	// Link in child commands direct from Sonobuoy
 	rootCmd.AddCommand(app.NewSonobuoyCommand())
