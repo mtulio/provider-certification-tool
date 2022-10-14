@@ -2,6 +2,9 @@ package process
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"os"
+	"strings"
 )
 
 type OpenShiftSummary struct {
@@ -116,6 +119,42 @@ type OPCTPluginSummary struct {
 	FailedFilterSuite []string
 	// FailedFilterBaseline is the list of failures (A) excluding the baseline(B): A EXCLUDE B
 	FailedFilterBaseline []string
+}
+
+type openshiftTestsSuites struct {
+	openshiftConformance  *openshiftTestsSuite
+	kubernetesConformance *openshiftTestsSuite
+}
+
+func (o *openshiftTestsSuites) LoadAll() error {
+	err := o.openshiftConformance.Load()
+	if err != nil {
+		return err
+	}
+	err = o.kubernetesConformance.Load()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type openshiftTestsSuite struct {
+	inputFile string
+	name      string
+	count     int
+	tests     []string
+}
+
+func (s *openshiftTestsSuite) Load() error {
+	content, err := os.ReadFile(s.inputFile)
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	// fmt.Println(string(content))
+	s.tests = strings.Split(string(content), "\n")
+	s.count = len(s.tests)
+	return nil
 }
 
 // OpenShift CRs
