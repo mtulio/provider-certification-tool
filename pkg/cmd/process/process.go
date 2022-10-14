@@ -52,6 +52,8 @@ type resultsInput struct {
 	archive     string
 	archiveBase string
 	plugin      string
+	suiteOCP    string
+	suiteKube   string
 	mode        string
 	node        string
 	skipPrefix  bool
@@ -68,6 +70,7 @@ type summaryInput struct {
 type resultsSummary struct {
 	provider *summaryInput
 	baseline *summaryInput
+	suites   *openshiftTestsSuites
 }
 
 func NewCmdProcess() *cobra.Command {
@@ -90,7 +93,16 @@ func NewCmdProcess() *cobra.Command {
 		"Base result archive file. Example: -b file.tar.gz",
 	)
 	cmd.MarkFlagRequired("base")
-
+	cmd.Flags().StringVarP(
+		&data.suiteOCP, "base-suite-ocp", "o", "",
+		"Base suite reference. Example: -b openshift-tests-openshift-conformance.txt",
+	)
+	cmd.MarkFlagRequired("base-suite-ocp")
+	cmd.Flags().StringVarP(
+		&data.suiteKube, "base-suite-k8s", "k", "",
+		"Base suite reference. Example: -b openshift-tests-kube-conformance.txt",
+	)
+	cmd.MarkFlagRequired("base-suite-k8s")
 	return cmd
 }
 
@@ -133,6 +145,16 @@ func processResult(input resultsInput) error {
 			input:     &input,
 			openshift: NewOpenShiftSummary(),
 		},
+		suites: &openshiftTestsSuites{
+			openshiftConformance: &openshiftTestsSuite{
+				name:      "openshiftConformance",
+				inputFile: input.suiteOCP,
+			},
+			kubernetesConformance: &openshiftTestsSuite{
+				name:      "kubernetesConformance",
+				inputFile: input.suiteKube,
+			},
+		},
 	}
 
 	err := populateResult(results.provider)
@@ -147,6 +169,14 @@ func processResult(input resultsInput) error {
 			return err
 		}
 	}
+
+	// Read Suites
+	err = results.suites.LoadAll()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("OCP: %d\n", results.suites.openshiftConformance.count)
+	fmt.Printf("k8s: %d\n", results.suites.kubernetesConformance.count)
 
 	err = printAggregatedTable(&results)
 	if err != nil {
