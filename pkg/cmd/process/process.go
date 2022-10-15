@@ -1,18 +1,11 @@
 package process
 
 import (
-	"bytes"
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"path"
-	"sort"
-	"strings"
 
 	"github.com/pkg/errors"
-
 	"github.com/spf13/cobra"
 
 	"github.com/vmware-tanzu/sonobuoy/pkg/client/results"
@@ -59,7 +52,8 @@ type resultsInput struct {
 	skipPrefix  bool
 }
 
-type summaryInput struct {
+// ResultSummary holds the summary of a single execution
+type ResultSummary struct {
 	name      string
 	archive   string
 	cluster   discovery.ClusterSummary
@@ -67,9 +61,10 @@ type summaryInput struct {
 	input     *resultsInput
 }
 
-type resultsSummary struct {
-	provider *summaryInput
-	baseline *summaryInput
+// ConsolidatedSummary Aggregate the results of provider and baseline
+type ConsolidatedSummary struct {
+	provider *ResultSummary
+	baseline *ResultSummary
 	suites   *openshiftTestsSuites
 }
 
@@ -132,14 +127,14 @@ func getReader(filepath string) (*results.Reader, func(), error) {
 
 func processResult(input resultsInput) error {
 
-	results := resultsSummary{
-		provider: &summaryInput{
+	cs := ConsolidatedSummary{
+		provider: &ResultSummary{
 			name:      "provider",
 			archive:   input.archive,
 			input:     &input,
 			openshift: NewOpenShiftSummary(),
 		},
-		baseline: &summaryInput{
+		baseline: &ResultSummary{
 			name:      "base",
 			archive:   input.archiveBase,
 			input:     &input,
@@ -157,45 +152,47 @@ func processResult(input resultsInput) error {
 		},
 	}
 
-	err := populateResult(results.provider)
+	err := populateResult(cs.provider)
 	if err != nil {
 		fmt.Println("ERROR processing provider results...")
 		return err
 	}
-	if results.baseline.archive != "" {
-		err := populateResult(results.baseline)
-		if err != nil {
-			fmt.Println("ERROR processing baseline results...")
-			return err
-		}
+
+	err = populateResult(cs.baseline)
+	if err != nil {
+		fmt.Println("ERROR processing baseline results...")
+		return err
 	}
 
 	// Read Suites
-	err = results.suites.LoadAll()
+	err = cs.suites.LoadAll()
 	if err != nil {
 		return err
 	}
-	fmt.Printf("OCP: %d\n", results.suites.openshiftConformance.count)
-	fmt.Printf("k8s: %d\n", results.suites.kubernetesConformance.count)
 
-	err = printAggregatedTable(&results)
+	err = printAggregatedTable(&cs)
 	if err != nil {
 		return err
 	}
+
+	// build the filters
+	// Filter1: compare  failed tests with suite, getting intersection
+	// Filter2: compare results from Filter1 and exclude failed tests from the Baseline
+	// err = cs.ApplyFilters()
 
 	return err
 }
 
-func populateResult(result *summaryInput) error {
-	input := *result.input
-	r, cleanup, err := getReader(result.archive)
+func populateResult(rs *ResultSummary) error {
+
+	reader, cleanup, err := getReader(rs.archive)
 	defer cleanup()
 	if err != nil {
 		return err
 	}
 
 	// Report on all plugins or the specified one.
-	plugins, err := getPluginList(r)
+	plugins, err := getPluginList(reader)
 	if err != nil {
 		return errors.Wrapf(err, "unable to determine plugins to report on")
 	}
@@ -204,36 +201,20 @@ func populateResult(result *summaryInput) error {
 	}
 
 	var lastErr error
-	for i, plugin := range plugins {
-		input.plugin = plugin
-
-		// Load file with a new reader since we can't assume this reader has rewind
-		// capabilities.
-		r, cleanup, err = getReader(result.archive)
-		defer cleanup()
+	for _, plugin := range plugins {
+		err := processPlugin(rs, plugin)
 		if err != nil {
 			lastErr = err
-		}
-
-		err = printSinglePlugin(input, r, result)
-		if err != nil {
-			lastErr = err
-		}
-
-		// Seperator line, but don't print a needless one at the end.
-		if i+1 < len(plugins) {
-			fmt.Println()
 		}
 	}
 
-	input.plugin = clusterHealthSummaryPluginName
-	r, cleanup, err = getReader(result.archive)
+	reader, cleanup, err = getReader(rs.archive)
 	defer cleanup()
 	if err != nil {
 		lastErr = err
 	}
 
-	err = populateSummary(r, result)
+	err = populateSummary(reader, rs)
 	if err != nil {
 		lastErr = err
 	}
@@ -241,19 +222,66 @@ func populateResult(result *summaryInput) error {
 	return lastErr
 }
 
+func processPlugin(rs *ResultSummary, plugin string) error {
+	reader, cleanup, err := getReader(rs.archive)
+	defer cleanup()
+	if err != nil {
+		return err
+	}
+
+	obj, err := reader.PluginResultsItem(plugin)
+	if err != nil {
+		return err
+	}
+
+	err = processPluginResult(obj, rs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func processPluginResult(obj *results.Item, rs *ResultSummary) error {
+	statusCounts := map[string]int{}
+	var failedList []string
+
+	statusCounts, failedList = walkForSummary(obj, statusCounts, failedList)
+
+	total := 0
+	for _, v := range statusCounts {
+		total += v
+	}
+
+	rs.openshift.setPluginResult(&OPCTPluginSummary{
+		Name:       obj.Name,
+		Status:     obj.Status,
+		Total:      int64(total),
+		Passed:     int64(statusCounts[results.StatusPassed]),
+		Failed:     int64(statusCounts[results.StatusFailed] + statusCounts[results.StatusTimeout]),
+		Timeout:    int64(statusCounts[results.StatusTimeout]),
+		Skipped:    int64(statusCounts[results.StatusSkipped]),
+		FailedList: failedList,
+	})
+
+	delete(statusCounts, results.StatusPassed)
+	delete(statusCounts, results.StatusFailed)
+	delete(statusCounts, results.StatusTimeout)
+	delete(statusCounts, results.StatusSkipped)
+
+	return nil
+}
+
 // printHealthSummary pretends to work like printSinglePlugin
 // but for a "fake" plugin that prints health information
-func populateSummary(r *results.Reader, summary *summaryInput) error {
+func populateSummary(r *results.Reader, rs *ResultSummary) error {
 
-	var err error
-
-	// For summary and dump views, get the item as an object to iterate over.
 	ocpInfra := OpenShiftCrInfrastructures{}
 	ocpCVO := OpenShiftCrCvo{}
 	ocpCO := OpenShiftCrCo{}
 
-	err = r.WalkFiles(func(path string, info os.FileInfo, err error) error {
-		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &summary.cluster)
+	// For summary and dump views, get the item as an object to iterate over.
+	err := r.WalkFiles(func(path string, info os.FileInfo, err error) error {
+		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &rs.cluster)
 		if err != nil {
 			return err
 		}
@@ -274,21 +302,22 @@ func populateSummary(r *results.Reader, summary *summaryInput) error {
 	if err != nil {
 		return err
 	}
-	summary.openshift.setFromInfraCR(&ocpInfra)
-	summary.openshift.setFromCvoCR(&ocpCVO)
-	summary.openshift.setFromCoCR(&ocpCO)
+
+	rs.openshift.setFromInfraCR(&ocpInfra)
+	rs.openshift.setFromCvoCR(&ocpCVO)
+	rs.openshift.setFromCoCR(&ocpCO)
 
 	return nil
 }
 
-func printAggregatedTable(results *resultsSummary) error {
-	fmt.Printf("\n> OpenShift Provider Certification Execution Summary <\n\n")
+func printAggregatedTable(cs *ConsolidatedSummary) error {
+	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
 
-	pOCP := results.provider.openshift
-	pCL := results.provider.cluster
+	pOCP := cs.provider.openshift
+	pCL := cs.provider.cluster
 
-	bOCP := results.baseline.openshift
-	bCL := results.baseline.cluster
+	bOCP := cs.baseline.openshift
+	bCL := cs.baseline.cluster
 
 	newLineWithTab := "\t\t\n"
 	tbWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
@@ -365,58 +394,6 @@ func printAggregatedTable(results *resultsSummary) error {
 	return nil
 }
 
-type humanReadableWriter struct {
-	w io.Writer
-}
-
-func (hw *humanReadableWriter) Write(b []byte) (int, error) {
-	newb := bytes.Replace(b, []byte(`\n`), []byte("\n"), -1)
-	newb = bytes.Replace(newb, []byte(`\t`), []byte("\t"), -1)
-	_, err := hw.w.Write(newb)
-	return len(b), err
-}
-
-func printSinglePlugin(input resultsInput, r *results.Reader, summary *summaryInput) error {
-	// If we want to dump the whole file, don't decode to an Item object first.
-	if input.mode == resultModeDump {
-		fReader, err := r.PluginResultsReader(input.plugin)
-		if err != nil {
-			return errors.Wrapf(err, "failed to get results reader for plugin %v", input.plugin)
-		}
-		_, err = io.Copy(os.Stdout, fReader)
-		return err
-	} else if input.mode == resultModeReadable {
-		fReader, err := r.PluginResultsReader(input.plugin)
-		if err != nil {
-			return errors.Wrapf(err, "failed to get results reader for plugin %v", input.plugin)
-		}
-		writer := &humanReadableWriter{os.Stdout}
-		_, err = io.Copy(writer, fReader)
-		if err != nil {
-			return errors.Wrapf(err, "failed to copy data for plugin %v", input.plugin)
-		}
-		return err
-	}
-
-	// For summary and detailed views, get the item as an object to iterate over.
-	obj, err := r.PluginResultsItem(input.plugin)
-	if err != nil {
-		return err
-	}
-
-	obj = obj.GetSubTreeByName(input.node)
-	if obj == nil {
-		return fmt.Errorf("node named %q not found", input.node)
-	}
-
-	switch input.mode {
-	case resultModeDetailed:
-		return printResultsDetails([]string{}, obj, input)
-	default:
-		return printResultsSummary(obj, summary)
-	}
-}
-
 func getPluginList(r *results.Reader) ([]string, error) {
 	runInfo := discovery.RunInfo{}
 	err := r.WalkFiles(func(path string, info os.FileInfo, err error) error {
@@ -424,133 +401,6 @@ func getPluginList(r *results.Reader) ([]string, error) {
 	})
 
 	return runInfo.LoadedPlugins, errors.Wrap(err, "finding plugin list")
-}
-
-func printResultsDetails(treePath []string, o *results.Item, input resultsInput) error {
-	if o == nil {
-		return nil
-	}
-
-	if len(o.Items) > 0 {
-		treePath = append(treePath, o.Name)
-		for _, v := range o.Items {
-			if err := printResultsDetails(treePath, &v, input); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	leafFile := getFileFromMeta(o.Metadata)
-	if leafFile == "" {
-		// Print each leaf node as a json object. Add the path as a metadata field for access by the end user.
-		if o.Metadata == nil {
-			o.Metadata = map[string]string{}
-		}
-		o.Metadata["path"] = strings.Join(treePath, "|")
-		b, err := json.Marshal(o)
-		if err != nil {
-			return errors.Wrap(err, "marshalling item to json")
-		}
-		fmt.Println(string(b))
-	} else {
-		// Load file with a new reader since we can't assume this reader has rewind
-		// capabilities.
-		r, cleanup, err := getReader(input.archive)
-		defer cleanup()
-		if err != nil {
-			return errors.Wrapf(err, "reading archive to get file %v", leafFile)
-		}
-		resultFile := path.Join(results.PluginsDir, input.plugin, leafFile)
-		filereader, err := r.FileReader(resultFile)
-		if err != nil {
-			return err
-		}
-
-		if input.skipPrefix {
-			_, err = io.Copy(os.Stdout, filereader)
-			return err
-		} else {
-			// When printing items like this we want the name of the node in
-			// the prefix. In the "junit" version, we do not, since the name is
-			// already visible on the object.
-			treePath = append(treePath, o.Name)
-			fmt.Printf("%v ", strings.Join(treePath, "|"))
-			_, err = io.Copy(os.Stdout, filereader)
-			return err
-		}
-	}
-
-	return nil
-}
-
-func printResultsSummary(o *results.Item, summary *summaryInput) error {
-	statusCounts := map[string]int{}
-	var failedList []string
-
-	statusCounts, failedList = walkForSummary(o, statusCounts, failedList)
-
-	total := 0
-	for _, v := range statusCounts {
-		total += v
-	}
-
-	summary.openshift.setPluginResult(&OPCTPluginSummary{
-		Name:       o.Name,
-		Status:     o.Status,
-		Total:      int64(total),
-		Passed:     int64(statusCounts[results.StatusPassed]),
-		Failed:     int64(statusCounts[results.StatusFailed] + statusCounts[results.StatusTimeout]),
-		Timeout:    int64(statusCounts[results.StatusTimeout]),
-		Skipped:    int64(statusCounts[results.StatusSkipped]),
-		FailedList: failedList,
-	})
-
-	// fmt.Printf("\n-> Plugin: %s\n", o.Name)
-	// fmt.Println("Status:", o.Status)
-	// fmt.Println("Total:", total)
-
-	// // We want to print the built-in status type results first before printing any custom statuses, so print first then delete.
-	// fmt.Println("Passed:", statusCounts[results.StatusPassed])
-	// fmt.Println("Failed:", statusCounts[results.StatusFailed]+statusCounts[results.StatusTimeout])
-	// fmt.Println("Skipped:", statusCounts[results.StatusSkipped])
-
-	delete(statusCounts, results.StatusPassed)
-	delete(statusCounts, results.StatusFailed)
-	delete(statusCounts, results.StatusTimeout)
-	delete(statusCounts, results.StatusSkipped)
-
-	// We want the custom statuses to always be printed in order so sort them before proceeding
-	keys := []string{}
-	for k := range statusCounts {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	keys = unique(keys)
-
-	// for _, k := range keys {
-	// 	fmt.Printf("%v: %v\n", k, statusCounts[k])
-	// }
-
-	// if len(failedList) > 0 {
-	// 	fmt.Print("\nFailed tests:\n")
-	// 	fmt.Print(strings.Join(failedList, "\n"))
-	// 	fmt.Println()
-	// }
-
-	return nil
-}
-
-func unique(original []string) []string {
-	keys := make(map[string]bool)
-	list := []string{}
-	for _, entry := range original {
-		if _, value := keys[entry]; !value {
-			keys[entry] = true
-			list = append(list, entry)
-		}
-	}
-	return list
 }
 
 func walkForSummary(result *results.Item, statusCounts map[string]int, failList []string) (map[string]int, []string) {
@@ -568,21 +418,4 @@ func walkForSummary(result *results.Item, statusCounts map[string]int, failList 
 	}
 
 	return statusCounts, failList
-}
-
-// getFileFromMeta pulls the file out of the given metadata but also
-// converts it to a slash-based-seperator since that is what is internal
-// to the tar file. The metadata is written by the node and so may use
-// Windows seperators.
-func getFileFromMeta(m map[string]string) string {
-	if m == nil {
-		return ""
-	}
-	return toSlash(m["file"])
-}
-
-// toSlash is a (for our purpose) an improved version of filepath.ToSlash which ignores the
-// current OS seperator and simply converts all windows `\` to `/`.
-func toSlash(path string) string {
-	return strings.ReplaceAll(path, string(windowsSeperator), "/")
 }
