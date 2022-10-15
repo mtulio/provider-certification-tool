@@ -24,52 +24,19 @@ type ResultSummary struct {
 	archive   string
 	cluster   discovery.ClusterSummary
 	openshift *OpenShiftSummary
+	reader *results.Reader
 }
 
-
-func getPluginList(r *results.Reader) ([]string, error) {
-	runInfo := discovery.RunInfo{}
-	err := r.WalkFiles(func(path string, info os.FileInfo, err error) error {
-		return results.ExtractFileIntoStruct(r.RunInfoFile(), path, info, &runInfo)
-	})
-
-	return runInfo.LoadedPlugins, errors.Wrap(err, "finding plugin list")
-}
-
-// getReader returns a *results.Reader along with a cleanup function to close the
-// underlying readers. The cleanup function is guaranteed to never be nil.
-func getReader(filepath string) (*results.Reader, func(), error) {
-	fi, err := os.Stat(filepath)
-	if err != nil {
-		return nil, func() {}, err
-	}
-	if fi.IsDir() {
-		return results.NewReaderFromDir(filepath), func() {}, nil
-	}
-	f, err := os.Open(filepath)
-	if err != nil {
-		return nil, func() {}, errors.Wrapf(err, "could not open sonobuoy archive: %v", filepath)
-	}
-
-	gzr, err := gzip.NewReader(f)
-	if err != nil {
-		return nil, func() { f.Close() }, errors.Wrap(err, "could not make a gzip reader")
-	}
-
-	r := results.NewReaderWithVersion(gzr, results.VersionTen)
-	return r, func() { gzr.Close(); f.Close() }, nil
-}
-
-func populateResult(rs *ResultSummary) error {
-
-	reader, cleanup, err := getReader(rs.archive)
+func (rs *ResultSummary) Populate() error {
+	// TODO: review the fd usage for tarbal and file
+	cleanup, err := rs.openReader()
 	defer cleanup()
 	if err != nil {
 		return err
 	}
 
 	// Report on all plugins or the specified one.
-	plugins, err := getPluginList(reader)
+	plugins, err := rs.getPluginList()
 	if err != nil {
 		return errors.Wrapf(err, "unable to determine plugins to report on")
 	}
@@ -79,19 +46,20 @@ func populateResult(rs *ResultSummary) error {
 
 	var lastErr error
 	for _, plugin := range plugins {
-		err := processPlugin(rs, plugin)
+		err := rs.processPlugin(plugin)
 		if err != nil {
 			lastErr = err
 		}
 	}
 
-	reader, cleanup, err = getReader(rs.archive)
+	// TODO: review the fd usage for tarbal and file
+	cleanup, err = rs.openReader()
 	defer cleanup()
 	if err != nil {
-		lastErr = err
+		return err
 	}
 
-	err = populateSummary(reader, rs)
+	err = rs.populateSummary()
 	if err != nil {
 		lastErr = err
 	}
@@ -99,26 +67,67 @@ func populateResult(rs *ResultSummary) error {
 	return lastErr
 }
 
-func processPlugin(rs *ResultSummary, plugin string) error {
-	reader, cleanup, err := getReader(rs.archive)
+func (rs *ResultSummary) getPluginList() ([]string, error) {
+	runInfo := discovery.RunInfo{}
+	err := rs.reader.WalkFiles(func(path string, info os.FileInfo, err error) error {
+		return results.ExtractFileIntoStruct(rs.reader.RunInfoFile(), path, info, &runInfo)
+	})
+
+	return runInfo.LoadedPlugins, errors.Wrap(err, "finding plugin list")
+}
+
+// getReader returns a *results.Reader along with a cleanup function to close the
+// underlying readers. The cleanup function is guaranteed to never be nil.
+func (rs *ResultSummary) openReader() (func(), error) {
+
+	filepath := rs.archive
+	fi, err := os.Stat(filepath)
+	if err != nil {
+		rs.reader = nil
+		return func() {}, err
+	}
+	if fi.IsDir() {
+		rs.reader = results.NewReaderFromDir(filepath)
+		return func() {}, nil
+	}
+	f, err := os.Open(filepath)
+	if err != nil {
+		rs.reader = nil
+		return func() {}, errors.Wrapf(err, "could not open sonobuoy archive: %v", filepath)
+	}
+
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		rs.reader = nil
+		return func() { f.Close() }, errors.Wrap(err, "could not make a gzip reader")
+	}
+
+	rs.reader = results.NewReaderWithVersion(gzr, results.VersionTen)
+	return func() { gzr.Close(); f.Close() }, nil
+}
+
+func (rs *ResultSummary) processPlugin(plugin string) error {
+
+	// TODO: review the fd usage for tarbal and file
+	cleanup, err := rs.openReader()
 	defer cleanup()
 	if err != nil {
 		return err
 	}
 
-	obj, err := reader.PluginResultsItem(plugin)
+	obj, err := rs.reader.PluginResultsItem(plugin)
 	if err != nil {
 		return err
 	}
 
-	err = processPluginResult(obj, rs)
+	err = rs.processPluginResult(obj)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func processPluginResult(obj *results.Item, rs *ResultSummary) error {
+func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 	statusCounts := map[string]int{}
 	var failedList []string
 
@@ -150,14 +159,14 @@ func processPluginResult(obj *results.Item, rs *ResultSummary) error {
 
 // printHealthSummary pretends to work like printSinglePlugin
 // but for a "fake" plugin that prints health information
-func populateSummary(r *results.Reader, rs *ResultSummary) error {
+func (rs *ResultSummary) populateSummary() error {
 
 	ocpInfra := OpenShiftCrInfrastructures{}
 	ocpCVO := OpenShiftCrCvo{}
 	ocpCO := OpenShiftCrCo{}
 
 	// For summary and dump views, get the item as an object to iterate over.
-	err := r.WalkFiles(func(path string, info os.FileInfo, err error) error {
+	err := rs.reader.WalkFiles(func(path string, info os.FileInfo, err error) error {
 		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &rs.cluster)
 		if err != nil {
 			return err
