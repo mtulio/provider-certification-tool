@@ -3,6 +3,7 @@ package process
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -16,13 +17,6 @@ type Input struct {
 	archiveBase string
 	suiteOCP    string
 	suiteKube   string
-}
-
-// ConsolidatedSummary Aggregate the results of provider and baseline
-type ConsolidatedSummary struct {
-	provider *ResultSummary
-	baseline *ResultSummary
-	suites   *openshiftTestsSuites
 }
 
 func NewCmdProcess() *cobra.Command {
@@ -84,40 +78,30 @@ func processResult(input *Input) error {
 		},
 	}
 
-	err := populateResult(cs.provider)
-	if err != nil {
-		fmt.Println("ERROR processing provider results...")
-		return err
-	}
-
-	err = populateResult(cs.baseline)
-	if err != nil {
-		fmt.Println("ERROR processing baseline results...")
-		return err
-	}
-
-	// Read Suites
-	err = cs.suites.LoadAll()
+	err := cs.Process()
 	if err != nil {
 		return err
 	}
 
-	err = printAggregatedTable(&cs)
+	err = printAggregatedSummary(&cs)
 	if err != nil {
 		return err
 	}
 
-	// build the filters
-	// Filter1: compare  failed tests with suite, getting intersection
-	// Filter2: compare results from Filter1 and exclude failed tests from the Baseline
-	// err = cs.ApplyFilters()
+	err = printProcessedSummary(&cs)
+	if err != nil {
+		return err
+	}
+
+	err = printErrorDetails(&cs)
+	if err != nil {
+		return err
+	}
 
 	return err
 }
 
-
-
-func printAggregatedTable(cs *ConsolidatedSummary) error {
+func printAggregatedSummary(cs *ConsolidatedSummary) error {
 	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
 
 	pOCP := cs.provider.openshift
@@ -197,6 +181,209 @@ func printAggregatedTable(cs *ConsolidatedSummary) error {
 
 	fmt.Fprintf(tbWriter, " - Pods health\t: %s\t: %s\n", pPodsHealthMsg, bPodsHealthMsg)
 	tbWriter.Flush()
+
+	return nil
+}
+
+func printSummaryPlugin(p *OPCTPluginSummary) {
+	fmt.Printf(" - %s:\n", p.Name)
+	fmt.Printf("   - Status: %s\n", p.Status)
+	fmt.Printf("   - Total: %d\n", p.Total)
+	fmt.Printf("   - Passed: %d\n", p.Passed)
+	fmt.Printf("   - Failed: %d\n", p.Failed)
+	fmt.Printf("   - Timeout: %d\n", p.Timeout)
+	fmt.Printf("   - Skipped: %d\n", p.Skipped)
+	fmt.Printf("   - len(FailedList): %d\n", len(p.FailedList))
+	fmt.Printf("   - len(FailedFilterSuite): %d\n", len(p.FailedFilterSuite))
+	fmt.Printf("   - len(FailedFilterBaseline): %d\n", len(p.FailedFilterBaseline))
+}
+
+func printProcessedSummary(cs *ConsolidatedSummary) error {
+
+	fmt.Printf("\n> Processed Summary <\n")
+
+	fmt.Printf("\n Total Tests suites\n")
+	fmt.Printf(" - kubernetes/conformance: %d \n", cs.suites.GetTotalK8S())
+	fmt.Printf(" - openshift/conformance: %d \n", cs.suites.GetTotalOCP())
+
+	fmt.Printf("\n Total Tests by Certification Layer: \n")
+	printSummaryPlugin(cs.provider.openshift.getResultK8SValidated())
+	printSummaryPlugin(cs.provider.openshift.getResultOCPValidated())
+
+	return nil
+}
+
+func printErrorDetailPlugin(p *OPCTPluginSummary) {
+	fmt.Printf("\n - %s: (%d failures)\n\n", p.Name,  len(p.FailedFilterBaseline))
+	for _, test := range p.FailedFilterBaseline {
+		fmt.Println(test)
+	}
+}
+
+func printErrorDetails(cs *ConsolidatedSummary) error {
+
+	fmt.Printf("\n> Processed Summary <\n")
+	fmt.Printf("\n Total Tests by Certification Layer: \n")
+	printErrorDetailPlugin(cs.provider.openshift.getResultK8SValidated())
+	printErrorDetailPlugin(cs.provider.openshift.getResultOCPValidated())
+
+	return nil
+}
+
+// ConsolidatedSummary Aggregate the results of provider and baseline
+type ConsolidatedSummary struct {
+	provider *ResultSummary
+	baseline *ResultSummary
+	suites   *openshiftTestsSuites
+}
+
+func (cs *ConsolidatedSummary) Process() error {
+	err := cs.provider.Populate()
+	if err != nil {
+		fmt.Println("ERROR processing provider results...")
+		return err
+	}
+
+	err = cs.baseline.Populate()
+	if err != nil {
+		fmt.Println("ERROR processing baseline results...")
+		return err
+	}
+
+	// Read Suites
+	err = cs.suites.LoadAll()
+	if err != nil {
+		return err
+	}
+
+	// build the filters
+	// Filter1: compare  failed tests with suite, getting intersection
+	// Filter2: compare results from Filter1 and exclude failed tests from the Baseline
+	// err = cs.ApplyFilters()
+	err = cs.applyFilterSuite()
+	if err != nil {
+		return err
+	}
+
+	err = cs.applyFilterBaseline()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// applyFilterSuite process the FailedList for each plugin, getting **intersection** tests
+// for respective suite.
+func (cs *ConsolidatedSummary) applyFilterSuite() error {
+	err := cs.applyFilterSuiteToPlugin("kubernetes-conformance")
+	if err != nil {
+		return err
+	}
+
+	err = cs.applyFilterSuiteToPlugin("openshift-validated")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// applyFilterSuiteToPlugin calculates the intersection of Provider Failed AND suite
+func (cs *ConsolidatedSummary) applyFilterSuiteToPlugin(plugin string) error {
+	var e2eSuite []string
+	var e2eFailures []string
+	var e2eFailuresFiltered []string
+	hashSuite := make(map[string]struct{})
+
+	switch plugin {
+	case "kubernetes-conformance":
+		e2eSuite = cs.suites.kubernetesConformance.tests
+		e2eFailures = cs.provider.openshift.pluginResultK8sConformance.FailedList
+	case "openshift-validated":
+		e2eSuite = cs.suites.openshiftConformance.tests
+		e2eFailures = cs.provider.openshift.pluginResultOCPValidated.FailedList
+	default:
+		fmt.Println("Suite not found!\n")
+	}
+
+	for _, v := range e2eSuite {
+		hashSuite[v] = struct{}{}
+	}
+
+	for _, v := range e2eFailures {
+		if _, ok := hashSuite[v]; ok {
+			e2eFailuresFiltered = append(e2eFailuresFiltered, v)
+		}
+	}
+	sort.Strings(e2eFailuresFiltered)
+
+	switch plugin {
+	case "kubernetes-conformance":
+		cs.provider.openshift.pluginResultK8sConformance.FailedFilterSuite = e2eFailuresFiltered
+	case "openshift-validated":
+		cs.provider.openshift.pluginResultOCPValidated.FailedFilterSuite = e2eFailuresFiltered
+	default:
+		fmt.Println("Suite not found!\n")
+	}
+
+	return nil
+}
+
+// applyFilterBaseline process the FailedFilterSuite for each plugin, **excluding** failures from
+// baseline test.
+func (cs *ConsolidatedSummary) applyFilterBaseline() error {
+	err := cs.applyFilterBaselineForPlugin("kubernetes-conformance")
+	if err != nil {
+		return err
+	}
+
+	err = cs.applyFilterBaselineForPlugin("openshift-validated")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// applyFilterBaselineForPlugin calculates the **exclusion** tests of
+// Provider Failed included on suite and Baseline failed tests.
+func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error {
+	var e2eFailuresProvider []string
+	var e2eFailuresBaseline []string
+	var e2eFailuresFiltered []string
+	hashBaseline := make(map[string]struct{})
+
+	switch plugin {
+	case "kubernetes-conformance":
+		e2eFailuresProvider = cs.provider.openshift.pluginResultK8sConformance.FailedFilterSuite
+		e2eFailuresBaseline = cs.baseline.openshift.pluginResultK8sConformance.FailedList
+	case "openshift-validated":
+		e2eFailuresProvider = cs.provider.openshift.pluginResultOCPValidated.FailedFilterSuite
+		e2eFailuresBaseline = cs.baseline.openshift.pluginResultOCPValidated.FailedList
+	default:
+		fmt.Println("Suite not found!\n")
+	}
+
+	for _, v := range e2eFailuresBaseline {
+		hashBaseline[v] = struct{}{}
+	}
+
+	for _, v := range e2eFailuresProvider {
+		if _, ok := hashBaseline[v]; !ok {
+			e2eFailuresFiltered = append(e2eFailuresFiltered, v)
+		}
+	}
+	sort.Strings(e2eFailuresFiltered)
+
+	switch plugin {
+	case "kubernetes-conformance":
+		cs.provider.openshift.pluginResultK8sConformance.FailedFilterBaseline = e2eFailuresFiltered
+	case "openshift-validated":
+		cs.provider.openshift.pluginResultOCPValidated.FailedFilterBaseline = e2eFailuresFiltered
+	default:
+		fmt.Println("Suite not found!\n")
+	}
 
 	return nil
 }

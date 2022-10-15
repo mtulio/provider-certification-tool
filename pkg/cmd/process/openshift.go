@@ -17,8 +17,8 @@ type OpenShiftSummary struct {
 	infraName                 string
 
 	// Plugin Results
-	pluginResultOCPValidated   *OPCTPluginSummary
 	pluginResultK8sConformance *OPCTPluginSummary
+	pluginResultOCPValidated   *OPCTPluginSummary
 
 	versionOPpctSonobuoy     string
 	versionOpctCli           string
@@ -122,26 +122,34 @@ type OPCTPluginSummary struct {
 }
 
 type openshiftTestsSuites struct {
-	openshiftConformance  *openshiftTestsSuite
 	kubernetesConformance *openshiftTestsSuite
+	openshiftConformance  *openshiftTestsSuite
 }
 
-func (o *openshiftTestsSuites) LoadAll() error {
-	err := o.openshiftConformance.Load()
+func (ts *openshiftTestsSuites) LoadAll() error {
+	err := ts.openshiftConformance.Load()
 	if err != nil {
 		return err
 	}
-	err = o.kubernetesConformance.Load()
+	err = ts.kubernetesConformance.Load()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
+func (ts *openshiftTestsSuites) GetTotalOCP() int {
+	return ts.openshiftConformance.Count
+}
+
+func (ts *openshiftTestsSuites) GetTotalK8S() int {
+	return ts.kubernetesConformance.Count
+}
+
 type openshiftTestsSuite struct {
 	inputFile string
 	name      string
-	count     int
+	Count     int
 	tests     []string
 }
 
@@ -153,7 +161,7 @@ func (s *openshiftTestsSuite) Load() error {
 	}
 	// fmt.Println(string(content))
 	s.tests = strings.Split(string(content), "\n")
-	s.count = len(s.tests)
+	s.Count = len(s.tests)
 	return nil
 }
 
