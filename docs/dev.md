@@ -1,4 +1,4 @@
-# Provider Certification Tool
+# OpenShift Provider Certification Tool - Dev Guide
 
 ## Release
 
