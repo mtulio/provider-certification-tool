@@ -1,9 +1,12 @@
 package process
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"sort"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -17,6 +20,7 @@ type Input struct {
 	archiveBase string
 	suiteOCP    string
 	suiteKube   string
+	saveTo      string
 }
 
 func NewCmdProcess() *cobra.Command {
@@ -49,9 +53,12 @@ func NewCmdProcess() *cobra.Command {
 		"Base suite reference. Example: -b openshift-tests-kube-conformance.txt",
 	)
 	cmd.MarkFlagRequired("base-suite-k8s")
+	cmd.Flags().StringVarP(
+		&data.saveTo, "save-to", "s", "",
+		"Extract and Save Results to disk. Example: -s ./results",
+	)
 	return cmd
 }
-
 
 func processResult(input *Input) error {
 
@@ -96,6 +103,13 @@ func processResult(input *Input) error {
 	err = printErrorDetails(&cs)
 	if err != nil {
 		return err
+	}
+
+	if input.saveTo != "" {
+		err = cs.SaveResults(input.saveTo)
+		if err != nil {
+			return err
+		}
 	}
 
 	return err
@@ -214,7 +228,7 @@ func printProcessedSummary(cs *ConsolidatedSummary) error {
 }
 
 func printErrorDetailPlugin(p *OPCTPluginSummary) {
-	fmt.Printf("\n - %s: (%d failures)\n\n", p.Name,  len(p.FailedFilterBaseline))
+	fmt.Printf("\n - %s: (%d failures)\n\n", p.Name, len(p.FailedFilterBaseline))
 	for _, test := range p.FailedFilterBaseline {
 		fmt.Println(test)
 	}
@@ -256,10 +270,7 @@ func (cs *ConsolidatedSummary) Process() error {
 		return err
 	}
 
-	// build the filters
-	// Filter1: compare  failed tests with suite, getting intersection
-	// Filter2: compare results from Filter1 and exclude failed tests from the Baseline
-	// err = cs.ApplyFilters()
+	// apply filters
 	err = cs.applyFilterSuite()
 	if err != nil {
 		return err
@@ -385,5 +396,237 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 		fmt.Println("Suite not found!\n")
 	}
 
+	return nil
+}
+
+func (cs *ConsolidatedSummary) SaveResults(path string) error {
+
+	if err := createDir(path); err != nil {
+		return err
+	}
+
+	prefix := "tests"
+
+	// for each plugin:
+	// save provider failures
+	suite := "kubernetes-conformance"
+	filename := fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedList); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedList); err != nil {
+		return err
+	}
+
+	// save provider failures with filter suite
+	suite = "kubernetes-conformance"
+	filename = fmt.Sprintf("%s/%s_%s_provider_filter1-suite.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterSuite); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	filename = fmt.Sprintf("%s/%s_%s_provider_filter1-suite.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterSuite); err != nil {
+		return err
+	}
+	// save provider failures with filter baseline
+	suite = "kubernetes-conformance"
+	filename = fmt.Sprintf("%s/%s_%s_provider_filter2-baseline.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	filename = fmt.Sprintf("%s/%s_%s_provider_filter2-baseline.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline); err != nil {
+		return err
+	}
+
+	// save baseline failures
+	suite = "kubernetes-conformance"
+	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.baseline.openshift.getResultK8SValidated().FailedList); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.baseline.openshift.getResultOCPValidated().FailedList); err != nil {
+		return err
+	}
+
+	// TODO
+	// // sub-dir failures-provider-filtered, extract:
+	// // - stdout
+	// // - detailed
+	// subdir := fmt.Sprintf("%s/failures-provider-filtered", path)
+	// if _, err := os.Stat(subdir); !os.IsNotExist(err) {
+	// 	log.Errorf("ERROR: directory '%s' already exists: %v\n", subdir, err)
+	// 	return err
+	// }
+	// if err := os.Mkdir(subdir, os.ModePerm); err != nil {
+	// 	log.Errorf("ERROR: unable to create directory '%s': %v\n", subdir, err)
+	// 	return err
+	// }
+	subdir := fmt.Sprintf("%s/failures-provider-filtered", path)
+	if err := createDir(subdir); err != nil {
+		return err
+	}
+
+	suite = "kubernetes-conformance"
+	subPrefix := fmt.Sprintf("%s/%s", subdir, suite)
+	errItems := cs.provider.openshift.getResultK8SValidated().FailedItems
+	errList := cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
+	errItems = cs.provider.openshift.getResultOCPValidated().FailedItems
+	errList = cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	// // sub-dir failures-provider, extract:
+	// // - stdout
+	// // - detailed
+	// subdir = fmt.Sprintf("%s/failures-provider", path)
+	subdir = fmt.Sprintf("%s/failures-provider", path)
+	if err := createDir(subdir); err != nil {
+		return err
+	}
+	suite = "kubernetes-conformance"
+	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
+	errItems = cs.provider.openshift.getResultK8SValidated().FailedItems
+	errList = cs.provider.openshift.getResultK8SValidated().FailedList
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
+	errItems = cs.provider.openshift.getResultOCPValidated().FailedItems
+	errList = cs.provider.openshift.getResultOCPValidated().FailedList
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	// // sub-dir failures-baseline, extract:
+	// // - stdout
+	// // - detailed
+	// subdir = fmt.Sprintf("%s/failures-baseline", path)
+	subdir = fmt.Sprintf("%s/failures-baseline", path)
+	if err := createDir(subdir); err != nil {
+		return err
+	}
+	suite = "kubernetes-conformance"
+	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
+	errItems = cs.baseline.openshift.getResultK8SValidated().FailedItems
+	errList = cs.baseline.openshift.getResultK8SValidated().FailedList
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
+	errItems = cs.baseline.openshift.getResultOCPValidated().FailedItems
+	errList = cs.baseline.openshift.getResultOCPValidated().FailedList
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	// for each suite: save test list
+	suite = "kubernetes-conformance"
+	filename = fmt.Sprintf("%s/%s_%s_suite_full.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.suites.kubernetesConformance.tests); err != nil {
+		return err
+	}
+	suite = "openshift-validated"
+	filename = fmt.Sprintf("%s/%s_%s_suite_full.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.suites.kubernetesConformance.tests); err != nil {
+		return err
+	}
+
+	fmt.Printf("\n Data Saved to directory '%s/'\n", path)
+	return nil
+}
+
+func writeFileTestList(filename string, data []string) error {
+	fd, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer fd.Close()
+
+	if err != nil {
+		log.Fatalf("failed creating file: %s", err)
+	}
+
+	writer := bufio.NewWriter(fd)
+	defer writer.Flush()
+
+	for _, line := range data {
+		_, err = writer.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func extractTestErrors(prefix string, items map[string]*PluginFailedItem, failures []string) error {
+
+	for idx, line := range failures {
+		if _, ok := items[line]; ok {
+			file := fmt.Sprintf("%s_%d-failure.txt", prefix, idx+1)
+			err := writeErrorToFile(file, items[line].Failure)
+			if err != nil {
+				log.Errorf("Error writing Failure for test: %s\n", line)
+			}
+
+			file = fmt.Sprintf("%s_%d-systemOut.txt", prefix, idx+1)
+			err = writeErrorToFile(file, items[line].SystemOut)
+			if err != nil {
+				log.Errorf("Error writing SystemOut for test: %s\n", line)
+			}
+		}
+	}
+
+	return nil
+}
+
+func writeErrorToFile(file, data string) error {
+	fd, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer fd.Close()
+
+	if err != nil {
+		log.Fatalf("failed creating file: %s", err)
+	}
+
+	writer := bufio.NewWriter(fd)
+	defer writer.Flush()
+
+	_, err = writer.WriteString(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createDir(path string) error {
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		log.Errorf("ERROR: Directory already exists [%s]: %v", path, err)
+		return err
+	}
+
+	if err := os.Mkdir(path, os.ModePerm); err != nil {
+		log.Errorf("ERROR: Unable to create directory [%s]: %v", path, err)
+		return err
+	}
 	return nil
 }

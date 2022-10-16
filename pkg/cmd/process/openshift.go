@@ -113,12 +113,21 @@ type OPCTPluginSummary struct {
 	Timeout int64
 	Skipped int64
 
+	// FailedItems is the map with details for each failure
+	FailedItems map[string]*PluginFailedItem
 	// FailedList is the list of tests failures on the original execution
 	FailedList []string
 	// FailedFilterSuite is the list of failures (A) included only in the original suite (B): A INTERSECTION B
 	FailedFilterSuite []string
 	// FailedFilterBaseline is the list of failures (A) excluding the baseline(B): A EXCLUDE B
 	FailedFilterBaseline []string
+}
+
+type PluginFailedItem struct {
+	Name      string
+	Failure   string
+	SystemOut string
+	Offset    int
 }
 
 type openshiftTestsSuites struct {

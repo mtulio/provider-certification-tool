@@ -24,7 +24,7 @@ type ResultSummary struct {
 	archive   string
 	cluster   discovery.ClusterSummary
 	openshift *OpenShiftSummary
-	reader *results.Reader
+	reader    *results.Reader
 }
 
 func (rs *ResultSummary) Populate() error {
@@ -86,6 +86,7 @@ func (rs *ResultSummary) openReader() (func(), error) {
 		rs.reader = nil
 		return func() {}, err
 	}
+	// When results is a directory
 	if fi.IsDir() {
 		rs.reader = results.NewReaderFromDir(filepath)
 		return func() {}, nil
@@ -129,24 +130,43 @@ func (rs *ResultSummary) processPlugin(plugin string) error {
 
 func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 	statusCounts := map[string]int{}
+	var failures []results.Item
 	var failedList []string
 
-	statusCounts, failedList = walkForSummary(obj, statusCounts, failedList)
+	statusCounts, failures = walkForSummary(obj, statusCounts, failures)
 
 	total := 0
 	for _, v := range statusCounts {
 		total += v
 	}
 
+	failedItems := make(map[string]*PluginFailedItem, len(failures))
+	for _, item := range failures {
+		failedItems[item.Name] = &PluginFailedItem{
+			Name: item.Name,
+		}
+		if _, ok := item.Details["failure"]; ok {
+			failedItems[item.Name].Failure = item.Details["failure"].(string)
+		}
+		if _, ok := item.Details["system-out"]; ok {
+			failedItems[item.Name].SystemOut = item.Details["system-out"].(string)
+		}
+		if _, ok := item.Details["offset"]; ok {
+			failedItems[item.Name].Offset = item.Details["offset"].(int)
+		}
+		failedList = append(failedList, item.Name)
+	}
+
 	rs.openshift.setPluginResult(&OPCTPluginSummary{
-		Name:       obj.Name,
-		Status:     obj.Status,
-		Total:      int64(total),
-		Passed:     int64(statusCounts[results.StatusPassed]),
-		Failed:     int64(statusCounts[results.StatusFailed] + statusCounts[results.StatusTimeout]),
-		Timeout:    int64(statusCounts[results.StatusTimeout]),
-		Skipped:    int64(statusCounts[results.StatusSkipped]),
-		FailedList: failedList,
+		Name:        obj.Name,
+		Status:      obj.Status,
+		Total:       int64(total),
+		Passed:      int64(statusCounts[results.StatusPassed]),
+		Failed:      int64(statusCounts[results.StatusFailed] + statusCounts[results.StatusTimeout]),
+		Timeout:     int64(statusCounts[results.StatusTimeout]),
+		Skipped:     int64(statusCounts[results.StatusSkipped]),
+		FailedList:  failedList,
+		FailedItems: failedItems,
 	})
 
 	delete(statusCounts, results.StatusPassed)
@@ -196,7 +216,7 @@ func (rs *ResultSummary) populateSummary() error {
 	return nil
 }
 
-func walkForSummary(result *results.Item, statusCounts map[string]int, failList []string) (map[string]int, []string) {
+func walkForSummary(result *results.Item, statusCounts map[string]int, failList []results.Item) (map[string]int, []results.Item) {
 	if len(result.Items) > 0 {
 		for _, item := range result.Items {
 			statusCounts, failList = walkForSummary(&item, statusCounts, failList)
@@ -207,7 +227,8 @@ func walkForSummary(result *results.Item, statusCounts map[string]int, failList 
 	statusCounts[result.Status]++
 
 	if result.Status == results.StatusFailed || result.Status == results.StatusTimeout {
-		failList = append(failList, result.Name)
+		result.Details["offset"] = statusCounts[result.Status]
+		failList = append(failList, *result)
 	}
 
 	return statusCounts, failList
