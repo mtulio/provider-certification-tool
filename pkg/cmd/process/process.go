@@ -13,6 +13,7 @@ import (
 
 	"github.com/vmware-tanzu/sonobuoy/pkg/errlog"
 	"text/tabwriter"
+	"github.com/xuri/excelize/v2"
 )
 
 type Input struct {
@@ -404,44 +405,51 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	if err := createDir(path); err != nil {
 		return err
 	}
-
 	prefix := "tests"
 
 	// for each plugin:
 	// save provider failures
 	suite := "kubernetes-conformance"
-	filename := fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
+	filename := fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedList); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedList); err != nil {
 		return err
 	}
 
 	// save provider failures with filter suite
 	suite = "kubernetes-conformance"
-	filename = fmt.Sprintf("%s/%s_%s_provider_filter1-suite.txt", path, prefix, suite)
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterSuite); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_provider_filter1-suite.txt", path, prefix, suite)
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterSuite); err != nil {
 		return err
 	}
 	// save provider failures with filter baseline
 	suite = "kubernetes-conformance"
-	filename = fmt.Sprintf("%s/%s_%s_provider_filter2-baseline.txt", path, prefix, suite)
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
+		return err
+	}
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_provider_filter2-baseline.txt", path, prefix, suite)
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline); err != nil {
+		return err
+	}
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
@@ -459,22 +467,22 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 		return err
 	}
 
-	// TODO
-	// // sub-dir failures-provider-filtered, extract:
-	// // - stdout
-	// // - detailed
-	// subdir := fmt.Sprintf("%s/failures-provider-filtered", path)
-	// if _, err := os.Stat(subdir); !os.IsNotExist(err) {
-	// 	log.Errorf("ERROR: directory '%s' already exists: %v\n", subdir, err)
-	// 	return err
-	// }
-	// if err := os.Mkdir(subdir, os.ModePerm); err != nil {
-	// 	log.Errorf("ERROR: unable to create directory '%s': %v\n", subdir, err)
-	// 	return err
-	// }
-	subdir := fmt.Sprintf("%s/failures-provider-filtered", path)
+	// Extract errors to sub-directory and create sheet with index
+	sheet := excelize.NewFile()
+	sheetFile := fmt.Sprintf("%s/failures-index.xlsx", path)
+	defer saveSheet(sheet, sheetFile)
+
+	// sub-dir failures-provider-filtered, extract:
+	// - stdout
+	// - detailed
+	currentDirectory := "failures-provider-filtered"
+	subdir := fmt.Sprintf("%s/%s", path, currentDirectory)
 	if err := createDir(subdir); err != nil {
 		return err
+	}
+	sheet.SetActiveSheet(sheet.NewSheet(currentDirectory))
+	if err := createSheet(sheet, currentDirectory); err != nil {
+		log.Error(err)
 	}
 
 	suite = "kubernetes-conformance"
@@ -484,6 +492,10 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
+	var rowN int64 = 2
+	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+		log.Error(err)
+	}
 
 	suite = "openshift-validated"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
@@ -492,21 +504,31 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
+	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+		log.Error(err)
+	}
 
-	// // sub-dir failures-provider, extract:
-	// // - stdout
-	// // - detailed
-	// subdir = fmt.Sprintf("%s/failures-provider", path)
-	subdir = fmt.Sprintf("%s/failures-provider", path)
+	// Provider Failures Details (Errors and Stdout)
+	currentDirectory = "failures-provider"
+	subdir = fmt.Sprintf("%s/%s", path, currentDirectory)
 	if err := createDir(subdir); err != nil {
 		return err
 	}
+	sheet.SetActiveSheet(sheet.NewSheet(currentDirectory))
+	if err := createSheet(sheet, currentDirectory); err != nil {
+		log.Error(err)
+	}
+
 	suite = "kubernetes-conformance"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
 	errItems = cs.provider.openshift.getResultK8SValidated().FailedItems
 	errList = cs.provider.openshift.getResultK8SValidated().FailedList
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
+	}
+	rowN = 2
+	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+		log.Error(err)
 	}
 
 	suite = "openshift-validated"
@@ -516,21 +538,33 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
+	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+		log.Error(err)
+	}
 
-	// // sub-dir failures-baseline, extract:
-	// // - stdout
-	// // - detailed
-	// subdir = fmt.Sprintf("%s/failures-baseline", path)
-	subdir = fmt.Sprintf("%s/failures-baseline", path)
+	// sub-dir failures-baseline, extract:
+	// - stdout
+	// - detailed
+	currentDirectory = "failures-baseline"
+	subdir = fmt.Sprintf("%s/%s", path, currentDirectory)
 	if err := createDir(subdir); err != nil {
 		return err
 	}
+	sheet.SetActiveSheet(sheet.NewSheet(currentDirectory))
+	if err := createSheet(sheet, currentDirectory); err != nil {
+		log.Error(err)
+	}
+
 	suite = "kubernetes-conformance"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
 	errItems = cs.baseline.openshift.getResultK8SValidated().FailedItems
 	errList = cs.baseline.openshift.getResultK8SValidated().FailedList
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
+	}
+	rowN = 2
+	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+		log.Error(err)
 	}
 
 	suite = "openshift-validated"
@@ -539,6 +573,9 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	errList = cs.baseline.openshift.getResultOCPValidated().FailedList
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
+	}
+	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+		log.Error(err)
 	}
 
 	// for each suite: save test list
@@ -629,4 +666,39 @@ func createDir(path string) error {
 		return err
 	}
 	return nil
+}
+
+func createSheet(sheet *excelize.File, sheeName string) error {
+	header := map[string]string{
+        "A1": "Plugin", "B1": "Index", "C1": "Error_Directory",
+        "D1": "Test_Name", "E1": "Notes_Review", "F1": "References"}
+
+	// create header
+    for k, v := range header {
+        sheet.SetCellValue(sheeName, k, v)
+    }
+
+	return nil
+}
+
+// populateGsheet fill each row per error item
+func populateGsheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) (error) {
+
+    for k, v := range list {
+        sheet.SetCellValue(sheeName, fmt.Sprintf("A%d", *rowN), suite)
+		sheet.SetCellValue(sheeName, fmt.Sprintf("B%d", *rowN), k+1)
+		sheet.SetCellValue(sheeName, fmt.Sprintf("C%d", *rowN), sheeName)
+		sheet.SetCellValue(sheeName, fmt.Sprintf("D%d", *rowN), v)
+		sheet.SetCellValue(sheeName, fmt.Sprintf("E%d", *rowN), "TODO Review")
+		sheet.SetCellValue(sheeName, fmt.Sprintf("F%d", *rowN), "")
+		*rowN += 1
+    }
+
+	return nil
+}
+
+func saveSheet(sheet *excelize.File, sheetFileName string) {
+	if err := sheet.SaveAs(sheetFileName); err != nil {
+        log.Error(err)
+    }
 }
