@@ -121,13 +121,21 @@ type OPCTPluginSummary struct {
 	FailedFilterSuite []string
 	// FailedFilterBaseline is the list of failures (A) excluding the baseline(B): A EXCLUDE B
 	FailedFilterBaseline []string
+	// FailedFilteFlaky is the list of failures with no Flakes on OpenShift CI
+	FailedFilterFlaky []string
 }
 
 type PluginFailedItem struct {
-	Name      string
-	Failure   string
+	// Name is the name of the e2e test
+	Name string
+	// Failure contains the failure reason extracted from JUnit field 'item.detials.failure'
+	Failure string
+	// SystemOut contains the entire test stdout extracted from JUnit field 'item.detials.system-out'
 	SystemOut string
-	Offset    int
+	// Offset is the offset of failure from the plugin result file
+	Offset int
+	// Flaky contains the flaky information from OpenShift CI - scraped from Sippy API
+	Flaky *SippyTestsResponse
 }
 
 type openshiftTestsSuites struct {
@@ -168,7 +176,7 @@ func (s *openshiftTestsSuite) Load() error {
 		log.Fatal(err)
 		return err
 	}
-	// fmt.Println(string(content))
+
 	s.tests = strings.Split(string(content), "\n")
 	s.Count = len(s.tests)
 	return nil
