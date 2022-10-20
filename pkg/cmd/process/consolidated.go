@@ -9,241 +9,9 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 
-	"github.com/vmware-tanzu/sonobuoy/pkg/errlog"
-	"text/tabwriter"
 	"github.com/xuri/excelize/v2"
 )
-
-type Input struct {
-	archive     string
-	archiveBase string
-	suiteOCP    string
-	suiteKube   string
-	saveTo      string
-}
-
-func NewCmdProcess() *cobra.Command {
-	data := Input{}
-	cmd := &cobra.Command{
-		Use:   "process archive.tar.gz",
-		Short: "Inspect plugin results.",
-		Run: func(cmd *cobra.Command, args []string) {
-			data.archive = args[0]
-			if err := processResult(&data); err != nil {
-				errlog.LogError(errors.Wrapf(err, "could not process archive: %v", args[0]))
-				os.Exit(1)
-			}
-		},
-		Args: cobra.ExactArgs(1),
-	}
-
-	cmd.Flags().StringVarP(
-		&data.archiveBase, "base", "b", "",
-		"Base result archive file. Example: -b file.tar.gz",
-	)
-	cmd.MarkFlagRequired("base")
-	cmd.Flags().StringVarP(
-		&data.suiteOCP, "base-suite-ocp", "o", "",
-		"Base suite reference. Example: -b openshift-tests-openshift-conformance.txt",
-	)
-	cmd.MarkFlagRequired("base-suite-ocp")
-	cmd.Flags().StringVarP(
-		&data.suiteKube, "base-suite-k8s", "k", "",
-		"Base suite reference. Example: -b openshift-tests-kube-conformance.txt",
-	)
-	cmd.MarkFlagRequired("base-suite-k8s")
-	cmd.Flags().StringVarP(
-		&data.saveTo, "save-to", "s", "",
-		"Extract and Save Results to disk. Example: -s ./results",
-	)
-	return cmd
-}
-
-func processResult(input *Input) error {
-
-	cs := ConsolidatedSummary{
-		provider: &ResultSummary{
-			name:      "provider",
-			archive:   input.archive,
-			openshift: NewOpenShiftSummary(),
-		},
-		baseline: &ResultSummary{
-			name:      "base",
-			archive:   input.archiveBase,
-			openshift: NewOpenShiftSummary(),
-		},
-		suites: &openshiftTestsSuites{
-			openshiftConformance: &openshiftTestsSuite{
-				name:      "openshiftConformance",
-				inputFile: input.suiteOCP,
-			},
-			kubernetesConformance: &openshiftTestsSuite{
-				name:      "kubernetesConformance",
-				inputFile: input.suiteKube,
-			},
-		},
-	}
-
-	err := cs.Process()
-	if err != nil {
-		return err
-	}
-
-	err = printAggregatedSummary(&cs)
-	if err != nil {
-		return err
-	}
-
-	err = printProcessedSummary(&cs)
-	if err != nil {
-		return err
-	}
-
-	err = printErrorDetails(&cs)
-	if err != nil {
-		return err
-	}
-
-	if input.saveTo != "" {
-		err = cs.SaveResults(input.saveTo)
-		if err != nil {
-			return err
-		}
-	}
-
-	return err
-}
-
-func printAggregatedSummary(cs *ConsolidatedSummary) error {
-	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
-
-	pOCP := cs.provider.openshift
-	pCL := cs.provider.cluster
-
-	bOCP := cs.baseline.openshift
-	bCL := cs.baseline.cluster
-
-	newLineWithTab := "\t\t\n"
-	tbWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
-
-	fmt.Fprintf(tbWriter, " Kubernetes API Server version\t: %s\t: %s\n", pCL.APIVersion, bCL.APIVersion)
-	fmt.Fprintf(tbWriter, " OpenShift Container Platform version\t: %s\t: %s\n", pOCP.cvoStatusDesiredVersion, bOCP.cvoStatusDesiredVersion)
-	fmt.Fprintf(tbWriter, " - Cluster Update Progressing\t: %s\t: %s\n", pOCP.cvoCondProgressing, bOCP.cvoCondProgressing)
-	fmt.Fprintf(tbWriter, " - Cluster Target Version\t: %s\t: %s\n", pOCP.cvoCondProgressingMessage, bOCP.cvoCondProgressingMessage)
-
-	fmt.Fprintf(tbWriter, newLineWithTab)
-	fmt.Fprintf(tbWriter, " OCP Infrastructure:\t\t\n")
-	fmt.Fprintf(tbWriter, " - PlatformType\t: %s\t: %s\n", pOCP.infraPlatformType, bOCP.infraPlatformType)
-	fmt.Fprintf(tbWriter, " - Name\t: %s\t: %s\n", pOCP.infraName, bOCP.infraName)
-	fmt.Fprintf(tbWriter, " - Topology\t: %s\t: %s\n", pOCP.infraTopology, bOCP.infraTopology)
-	fmt.Fprintf(tbWriter, " - ControlPlaneTopology\t: %s\t: %s\n", pOCP.infraControlPlaneTopology, bOCP.infraControlPlaneTopology)
-	fmt.Fprintf(tbWriter, " - API Server URL\t: %s\t: %s\n", pOCP.infraAPIServerURL, bOCP.infraAPIServerURL)
-	fmt.Fprintf(tbWriter, " - API Server URL (internal)\t: %s\t: %s\n", pOCP.infraAPIServerURLInternal, bOCP.infraAPIServerURLInternal)
-
-	fmt.Fprintf(tbWriter, newLineWithTab)
-	fmt.Fprintf(tbWriter, " Plugins summary by name:\t  Status [Total/Passed/Failed/Skipped]\t\n")
-
-	plK8S := pOCP.getResultK8SValidated()
-	name := plK8S.Name
-	pOCPPluginRes := fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plK8S.Status, plK8S.Total, plK8S.Passed, plK8S.Failed, plK8S.Skipped, plK8S.Timeout)
-	plK8S = bOCP.getResultK8SValidated()
-	bOCPPluginRes := fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plK8S.Status, plK8S.Total, plK8S.Passed, plK8S.Failed, plK8S.Skipped, plK8S.Timeout)
-	fmt.Fprintf(tbWriter, " - %s\t: %s\t: %s\n", name, pOCPPluginRes, bOCPPluginRes)
-
-	plOCP := pOCP.getResultOCPValidated()
-	name = plOCP.Name
-	pOCPPluginRes = fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plOCP.Status, plOCP.Total, plOCP.Passed, plOCP.Failed, plOCP.Skipped, plOCP.Timeout)
-	plOCP = bOCP.getResultOCPValidated()
-	bOCPPluginRes = fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plOCP.Status, plOCP.Total, plOCP.Passed, plOCP.Failed, plOCP.Skipped, plOCP.Timeout)
-	fmt.Fprintf(tbWriter, " - %s\t: %s\t: %s\n", name, pOCPPluginRes, bOCPPluginRes)
-
-	fmt.Fprintf(tbWriter, newLineWithTab)
-	fmt.Fprintf(tbWriter, " Health summary:\t  [A=True/P=True/D=True]\t\n")
-	fmt.Fprintf(tbWriter, " - Cluster Operators\t: [%d/%d/%d]\t: [%d/%d/%d]\n",
-		pOCP.coCountAvailable, pOCP.coCountProgressing, pOCP.coCountDegraded,
-		bOCP.coCountAvailable, bOCP.coCountProgressing, bOCP.coCountDegraded,
-	)
-
-	pNhMessage := fmt.Sprintf("%d/%d %s", pCL.NodeHealth.Total, pCL.NodeHealth.Total, "")
-	if pCL.NodeHealth.Total != 0 {
-		pNhMessage = fmt.Sprintf("%s (%d%%)", pNhMessage, 100*pCL.NodeHealth.Healthy/pCL.NodeHealth.Total)
-	}
-
-	bNhMessage := fmt.Sprintf("%d/%d %s", bCL.NodeHealth.Total, bCL.NodeHealth.Total, "")
-	if bCL.NodeHealth.Total != 0 {
-		bNhMessage = fmt.Sprintf("%s (%d%%)", bNhMessage, 100*bCL.NodeHealth.Healthy/bCL.NodeHealth.Total)
-	}
-	fmt.Fprintf(tbWriter, " - Node health\t: %s\t: %s\n", pNhMessage, bNhMessage)
-
-	pPodsHealthMsg := ""
-	bPodsHealthMsg := ""
-	if len(pCL.PodHealth.Details) > 0 {
-		phTotal := ""
-		if pCL.PodHealth.Total != 0 {
-			phTotal = fmt.Sprintf(" (%d%%)", 100*pCL.PodHealth.Healthy/pCL.PodHealth.Total)
-		}
-		pPodsHealthMsg = fmt.Sprintf("%d/%d %s", pCL.PodHealth.Healthy, pCL.PodHealth.Total, phTotal)
-	}
-	if len(bCL.PodHealth.Details) > 0 {
-		phTotal := ""
-		if bCL.PodHealth.Total != 0 {
-			phTotal = fmt.Sprintf(" (%d%%)", 100*bCL.PodHealth.Healthy/bCL.PodHealth.Total)
-		}
-		bPodsHealthMsg = fmt.Sprintf("%d/%d %s", bCL.PodHealth.Healthy, bCL.PodHealth.Total, phTotal)
-	}
-
-	fmt.Fprintf(tbWriter, " - Pods health\t: %s\t: %s\n", pPodsHealthMsg, bPodsHealthMsg)
-	tbWriter.Flush()
-
-	return nil
-}
-
-func printSummaryPlugin(p *OPCTPluginSummary) {
-	fmt.Printf(" - %s:\n", p.Name)
-	fmt.Printf("   - Status: %s\n", p.Status)
-	fmt.Printf("   - Total: %d\n", p.Total)
-	fmt.Printf("   - Passed: %d\n", p.Passed)
-	fmt.Printf("   - Failed: %d\n", p.Failed)
-	fmt.Printf("   - Timeout: %d\n", p.Timeout)
-	fmt.Printf("   - Skipped: %d\n", p.Skipped)
-	fmt.Printf("   - len(FailedList): %d\n", len(p.FailedList))
-	fmt.Printf("   - len(FailedFilterSuite): %d\n", len(p.FailedFilterSuite))
-	fmt.Printf("   - len(FailedFilterBaseline): %d\n", len(p.FailedFilterBaseline))
-}
-
-func printProcessedSummary(cs *ConsolidatedSummary) error {
-
-	fmt.Printf("\n> Processed Summary <\n")
-
-	fmt.Printf("\n Total Tests suites\n")
-	fmt.Printf(" - kubernetes/conformance: %d \n", cs.suites.GetTotalK8S())
-	fmt.Printf(" - openshift/conformance: %d \n", cs.suites.GetTotalOCP())
-
-	fmt.Printf("\n Total Tests by Certification Layer: \n")
-	printSummaryPlugin(cs.provider.openshift.getResultK8SValidated())
-	printSummaryPlugin(cs.provider.openshift.getResultOCPValidated())
-
-	return nil
-}
-
-func printErrorDetailPlugin(p *OPCTPluginSummary) {
-	fmt.Printf("\n - %s: (%d failures)\n\n", p.Name, len(p.FailedFilterBaseline))
-	for _, test := range p.FailedFilterBaseline {
-		fmt.Println(test)
-	}
-}
-
-func printErrorDetails(cs *ConsolidatedSummary) error {
-
-	fmt.Printf("\n> Processed Summary <\n")
-	fmt.Printf("\n Total Tests by Certification Layer: \n")
-	printErrorDetailPlugin(cs.provider.openshift.getResultK8SValidated())
-	printErrorDetailPlugin(cs.provider.openshift.getResultOCPValidated())
-
-	return nil
-}
 
 // ConsolidatedSummary Aggregate the results of provider and baseline
 type ConsolidatedSummary struct {
@@ -253,6 +21,8 @@ type ConsolidatedSummary struct {
 }
 
 func (cs *ConsolidatedSummary) Process() error {
+
+	// Load Result Summary from Archives
 	err := cs.provider.Populate()
 	if err != nil {
 		fmt.Println("ERROR processing provider results...")
@@ -265,13 +35,13 @@ func (cs *ConsolidatedSummary) Process() error {
 		return err
 	}
 
-	// Read Suites
+	// Load Tests for each suites
 	err = cs.suites.LoadAll()
 	if err != nil {
 		return err
 	}
 
-	// apply filters
+	// Apply filters
 	err = cs.applyFilterSuite()
 	if err != nil {
 		return err
@@ -282,18 +52,23 @@ func (cs *ConsolidatedSummary) Process() error {
 		return err
 	}
 
+	err = cs.applyFilterFlaky()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // applyFilterSuite process the FailedList for each plugin, getting **intersection** tests
 // for respective suite.
 func (cs *ConsolidatedSummary) applyFilterSuite() error {
-	err := cs.applyFilterSuiteToPlugin("kubernetes-conformance")
+	err := cs.applyFilterSuiteForPlugin("kubernetes-conformance")
 	if err != nil {
 		return err
 	}
 
-	err = cs.applyFilterSuiteToPlugin("openshift-validated")
+	err = cs.applyFilterSuiteForPlugin("openshift-validated")
 	if err != nil {
 		return err
 	}
@@ -301,8 +76,8 @@ func (cs *ConsolidatedSummary) applyFilterSuite() error {
 	return nil
 }
 
-// applyFilterSuiteToPlugin calculates the intersection of Provider Failed AND suite
-func (cs *ConsolidatedSummary) applyFilterSuiteToPlugin(plugin string) error {
+// applyFilterSuiteForPlugin calculates the intersection of Provider Failed AND suite
+func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
 	var e2eSuite []string
 	var e2eFailures []string
 	var e2eFailuresFiltered []string
@@ -374,7 +149,7 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 		e2eFailuresProvider = cs.provider.openshift.pluginResultOCPValidated.FailedFilterSuite
 		e2eFailuresBaseline = cs.baseline.openshift.pluginResultOCPValidated.FailedList
 	default:
-		fmt.Println("Suite not found!\n")
+		return errors.New("Unable to get current failures: Suite not found to apply filter: Baseline")
 	}
 
 	for _, v := range e2eFailuresBaseline {
@@ -394,9 +169,72 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 	case "openshift-validated":
 		cs.provider.openshift.pluginResultOCPValidated.FailedFilterBaseline = e2eFailuresFiltered
 	default:
-		fmt.Println("Suite not found!\n")
+		return errors.New("Unable to save filetered failures: Suite not found to apply filter: Baseline")
 	}
 
+	return nil
+}
+
+// applyFilterFlaky process the FailedFilterSuite for each plugin, **excluding** failures from
+// baseline test.
+func (cs *ConsolidatedSummary) applyFilterFlaky() error {
+	err := cs.applyFilterFlakyForPlugin("kubernetes-conformance")
+	if err != nil {
+		return err
+	}
+
+	err = cs.applyFilterFlakyForPlugin("openshift-validated")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// applyFilterFlakyForPlugin query the Sippy API looking for each failed test
+// on each plugin/suite, saving the list on the ResultSummary.
+func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
+
+	var ps *OPCTPluginSummary
+
+	switch plugin {
+	case "kubernetes-conformance":
+		ps = cs.provider.openshift.pluginResultK8sConformance
+	case "openshift-validated":
+		ps = cs.provider.openshift.pluginResultOCPValidated
+	default:
+		return errors.New("Suite not found to apply filter: Flaky")
+	}
+
+	// TODO: define if we will check for flakes for all failures or only filtered
+	// Query Flaky only the FilteredBaseline to avoid many external queries.
+	api := NewSippyAPI()
+	for _, name := range ps.FailedFilterBaseline {
+
+		resp, err := api.QueryTests(&SippyTestsRequestInput{TestName: name})
+		if err != nil {
+			log.Errorf("#> Error querying to Sippy API: %v", err)
+			continue
+		}
+		for _, r := range *resp {
+			if _, ok := ps.FailedItems[name]; ok {
+				ps.FailedItems[name].Flaky = &r
+			} else {
+				ps.FailedItems[name] = &PluginFailedItem{
+					Name:  name,
+					Flaky: &r,
+				}
+			}
+
+			// Remove all flakes, regardless the percentage.
+			// TODO: Review checking flaky severity
+			if ps.FailedItems[name].Flaky.CurrentFlakes == 0 {
+				ps.FailedFilterFlaky = append(ps.FailedFilterFlaky, name)
+			}
+		}
+	}
+
+	sort.Strings(ps.FailedFilterFlaky)
 	return nil
 }
 
@@ -408,7 +246,7 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	prefix := "tests"
 
 	// for each plugin:
-	// save provider failures
+	// Save Provider failures
 	suite := "kubernetes-conformance"
 	filename := fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedList); err != nil {
@@ -421,7 +259,7 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 		return err
 	}
 
-	// save provider failures with filter suite
+	// Save Provider failures with filter: Suite (only)
 	suite = "kubernetes-conformance"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterSuite); err != nil {
@@ -433,13 +271,10 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterSuite); err != nil {
 		return err
 	}
-	// save provider failures with filter baseline
+
+	// Save Provider failures with filter: Baseline exclusion
 	suite = "kubernetes-conformance"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
-		return err
-	}
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
@@ -449,6 +284,25 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
+
+	// Save Provider failures with filter: Flaky
+	suite = "kubernetes-conformance"
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterFlaky); err != nil {
+		return err
+	}
+	// Save the Providers failures for the latest filter.
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
+		return err
+	}
+
+	suite = "openshift-validated"
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, suite)
+	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterFlaky); err != nil {
+		return err
+	}
+	// Save the Providers failures for the latest filter.
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
 	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline); err != nil {
 		return err
@@ -468,6 +322,7 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	}
 
 	// Extract errors to sub-directory and create sheet with index
+	// TODO change to ODS
 	sheet := excelize.NewFile()
 	sheetFile := fmt.Sprintf("%s/failures-index.xlsx", path)
 	defer saveSheet(sheet, sheetFile)
@@ -670,35 +525,35 @@ func createDir(path string) error {
 
 func createSheet(sheet *excelize.File, sheeName string) error {
 	header := map[string]string{
-        "A1": "Plugin", "B1": "Index", "C1": "Error_Directory",
-        "D1": "Test_Name", "E1": "Notes_Review", "F1": "References"}
+		"A1": "Plugin", "B1": "Index", "C1": "Error_Directory",
+		"D1": "Test_Name", "E1": "Notes_Review", "F1": "References"}
 
 	// create header
-    for k, v := range header {
-        sheet.SetCellValue(sheeName, k, v)
-    }
+	for k, v := range header {
+		sheet.SetCellValue(sheeName, k, v)
+	}
 
 	return nil
 }
 
 // populateGsheet fill each row per error item
-func populateGsheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) (error) {
+func populateGsheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) error {
 
-    for k, v := range list {
-        sheet.SetCellValue(sheeName, fmt.Sprintf("A%d", *rowN), suite)
+	for k, v := range list {
+		sheet.SetCellValue(sheeName, fmt.Sprintf("A%d", *rowN), suite)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("B%d", *rowN), k+1)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("C%d", *rowN), sheeName)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("D%d", *rowN), v)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("E%d", *rowN), "TODO Review")
 		sheet.SetCellValue(sheeName, fmt.Sprintf("F%d", *rowN), "")
 		*rowN += 1
-    }
+	}
 
 	return nil
 }
 
 func saveSheet(sheet *excelize.File, sheetFileName string) {
 	if err := sheet.SaveAs(sheetFileName); err != nil {
-        log.Error(err)
-    }
+		log.Error(err)
+	}
 }

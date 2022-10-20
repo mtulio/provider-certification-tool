@@ -27,6 +27,7 @@ type ResultSummary struct {
 	reader    *results.Reader
 }
 
+// Populate eentry point to process the results into the summary structure.
 func (rs *ResultSummary) Populate() error {
 	// TODO: review the fd usage for tarbal and file
 	cleanup, err := rs.openReader()
@@ -67,6 +68,7 @@ func (rs *ResultSummary) Populate() error {
 	return lastErr
 }
 
+// getPluginList extract the plugin list from the archive reader.
 func (rs *ResultSummary) getPluginList() ([]string, error) {
 	runInfo := discovery.RunInfo{}
 	err := rs.reader.WalkFiles(func(path string, info os.FileInfo, err error) error {
@@ -76,7 +78,7 @@ func (rs *ResultSummary) getPluginList() ([]string, error) {
 	return runInfo.LoadedPlugins, errors.Wrap(err, "finding plugin list")
 }
 
-// getReader returns a *results.Reader along with a cleanup function to close the
+// openReader returns a *results.Reader along with a cleanup function to close the
 // underlying readers. The cleanup function is guaranteed to never be nil.
 func (rs *ResultSummary) openReader() (func(), error) {
 
@@ -107,6 +109,7 @@ func (rs *ResultSummary) openReader() (func(), error) {
 	return func() { gzr.Close(); f.Close() }, nil
 }
 
+// processPlugin receives the plugin name and load the result file to be processed.
 func (rs *ResultSummary) processPlugin(plugin string) error {
 
 	// TODO: review the fd usage for tarbal and file
@@ -128,6 +131,7 @@ func (rs *ResultSummary) processPlugin(plugin string) error {
 	return nil
 }
 
+// processPluginResult receives the plugin results object and parse it to the summary.
 func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 	statusCounts := map[string]int{}
 	var failures []results.Item
@@ -177,8 +181,8 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 	return nil
 }
 
-// printHealthSummary pretends to work like printSinglePlugin
-// but for a "fake" plugin that prints health information
+// populateSummary load all files from archive reader and extract desired
+// information to the ResultSummary.
 func (rs *ResultSummary) populateSummary() error {
 
 	ocpInfra := OpenShiftCrInfrastructures{}
@@ -216,6 +220,8 @@ func (rs *ResultSummary) populateSummary() error {
 	return nil
 }
 
+// walkForSummary recursively walk through the result YAML file extracting the counters
+// and failures.
 func walkForSummary(result *results.Item, statusCounts map[string]int, failList []results.Item) (map[string]int, []results.Item) {
 	if len(result.Items) > 0 {
 		for _, item := range result.Items {
