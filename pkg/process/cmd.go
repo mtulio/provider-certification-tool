@@ -9,6 +9,7 @@ import (
 
 	"github.com/vmware-tanzu/sonobuoy/pkg/errlog"
 	"text/tabwriter"
+	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/summary"
 )
 
 type Input struct {
@@ -58,25 +59,25 @@ func NewCmdProcess() *cobra.Command {
 
 func processResult(input *Input) error {
 
-	cs := ConsolidatedSummary{
-		provider: &ResultSummary{
-			name:      "provider",
-			archive:   input.archive,
-			openshift: NewOpenShiftSummary(),
+	cs := summary.ConsolidatedSummary{
+		Provider: &summary.ResultSummary{
+			Name:      "provider",
+			Archive:   input.archive,
+			Openshift: summary.NewOpenShiftSummary(),
 		},
-		baseline: &ResultSummary{
-			name:      "base",
-			archive:   input.archiveBase,
-			openshift: NewOpenShiftSummary(),
+		Baseline: &summary.ResultSummary{
+			Name:      "base",
+			Archive:   input.archiveBase,
+			Openshift: summary.NewOpenShiftSummary(),
 		},
-		suites: &openshiftTestsSuites{
-			openshiftConformance: &openshiftTestsSuite{
-				name:      "openshiftConformance",
-				inputFile: input.suiteOCP,
+		Suites: &summary.OpenshiftTestsSuites{
+			OpenshiftConformance: &summary.OpenshiftTestsSuite{
+				Name:      "openshiftConformance",
+				InputFile: input.suiteOCP,
 			},
-			kubernetesConformance: &openshiftTestsSuite{
-				name:      "kubernetesConformance",
-				inputFile: input.suiteKube,
+			KubernetesConformance: &summary.OpenshiftTestsSuite{
+				Name:      "kubernetesConformance",
+				InputFile: input.suiteKube,
 			},
 		},
 	}
@@ -111,54 +112,54 @@ func processResult(input *Input) error {
 	return err
 }
 
-func printAggregatedSummary(cs *ConsolidatedSummary) error {
+func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
 
-	pOCP := cs.provider.openshift
-	pCL := cs.provider.cluster
+	pOCP := cs.Provider.Openshift
+	pCL := cs.Provider.Cluster
 
-	bOCP := cs.baseline.openshift
-	bCL := cs.baseline.cluster
+	bOCP := cs.Baseline.Openshift
+	bCL := cs.Baseline.Cluster
 
 	newLineWithTab := "\t\t\n"
 	tbWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
 
 	fmt.Fprintf(tbWriter, " Kubernetes API Server version\t: %s\t: %s\n", pCL.APIVersion, bCL.APIVersion)
-	fmt.Fprintf(tbWriter, " OpenShift Container Platform version\t: %s\t: %s\n", pOCP.cvoStatusDesiredVersion, bOCP.cvoStatusDesiredVersion)
-	fmt.Fprintf(tbWriter, " - Cluster Update Progressing\t: %s\t: %s\n", pOCP.cvoCondProgressing, bOCP.cvoCondProgressing)
-	fmt.Fprintf(tbWriter, " - Cluster Target Version\t: %s\t: %s\n", pOCP.cvoCondProgressingMessage, bOCP.cvoCondProgressingMessage)
+	fmt.Fprintf(tbWriter, " OpenShift Container Platform version\t: %s\t: %s\n", pOCP.CvoStatusDesiredVersion, bOCP.CvoStatusDesiredVersion)
+	fmt.Fprintf(tbWriter, " - Cluster Update Progressing\t: %s\t: %s\n", pOCP.CvoCondProgressing, bOCP.CvoCondProgressing)
+	fmt.Fprintf(tbWriter, " - Cluster Target Version\t: %s\t: %s\n", pOCP.CvoCondProgressingMessage, bOCP.CvoCondProgressingMessage)
 
 	fmt.Fprintf(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " OCP Infrastructure:\t\t\n")
-	fmt.Fprintf(tbWriter, " - PlatformType\t: %s\t: %s\n", pOCP.infraPlatformType, bOCP.infraPlatformType)
-	fmt.Fprintf(tbWriter, " - Name\t: %s\t: %s\n", pOCP.infraName, bOCP.infraName)
-	fmt.Fprintf(tbWriter, " - Topology\t: %s\t: %s\n", pOCP.infraTopology, bOCP.infraTopology)
-	fmt.Fprintf(tbWriter, " - ControlPlaneTopology\t: %s\t: %s\n", pOCP.infraControlPlaneTopology, bOCP.infraControlPlaneTopology)
-	fmt.Fprintf(tbWriter, " - API Server URL\t: %s\t: %s\n", pOCP.infraAPIServerURL, bOCP.infraAPIServerURL)
-	fmt.Fprintf(tbWriter, " - API Server URL (internal)\t: %s\t: %s\n", pOCP.infraAPIServerURLInternal, bOCP.infraAPIServerURLInternal)
+	fmt.Fprintf(tbWriter, " - PlatformType\t: %s\t: %s\n", pOCP.InfraPlatformType, bOCP.InfraPlatformType)
+	fmt.Fprintf(tbWriter, " - Name\t: %s\t: %s\n", pOCP.InfraName, bOCP.InfraName)
+	fmt.Fprintf(tbWriter, " - Topology\t: %s\t: %s\n", pOCP.InfraTopology, bOCP.InfraTopology)
+	fmt.Fprintf(tbWriter, " - ControlPlaneTopology\t: %s\t: %s\n", pOCP.InfraControlPlaneTopology, bOCP.InfraControlPlaneTopology)
+	fmt.Fprintf(tbWriter, " - API Server URL\t: %s\t: %s\n", pOCP.InfraAPIServerURL, bOCP.InfraAPIServerURL)
+	fmt.Fprintf(tbWriter, " - API Server URL (internal)\t: %s\t: %s\n", pOCP.InfraAPIServerURLInternal, bOCP.InfraAPIServerURLInternal)
 
 	fmt.Fprintf(tbWriter, newLineWithTab)
-	fmt.Fprintf(tbWriter, " Plugins summary by name:\t  Status [Total/Passed/Failed/Skipped]\t\n")
+	fmt.Fprintf(tbWriter, " Plugins summary by name:\t  Status [Total/Passed/Failed/Skipped] (timeout)\n")
 
-	plK8S := pOCP.getResultK8SValidated()
+	plK8S := pOCP.GetResultK8SValidated()
 	name := plK8S.Name
 	pOCPPluginRes := fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plK8S.Status, plK8S.Total, plK8S.Passed, plK8S.Failed, plK8S.Skipped, plK8S.Timeout)
-	plK8S = bOCP.getResultK8SValidated()
+	plK8S = bOCP.GetResultK8SValidated()
 	bOCPPluginRes := fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plK8S.Status, plK8S.Total, plK8S.Passed, plK8S.Failed, plK8S.Skipped, plK8S.Timeout)
 	fmt.Fprintf(tbWriter, " - %s\t: %s\t: %s\n", name, pOCPPluginRes, bOCPPluginRes)
 
-	plOCP := pOCP.getResultOCPValidated()
+	plOCP := pOCP.GetResultOCPValidated()
 	name = plOCP.Name
 	pOCPPluginRes = fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plOCP.Status, plOCP.Total, plOCP.Passed, plOCP.Failed, plOCP.Skipped, plOCP.Timeout)
-	plOCP = bOCP.getResultOCPValidated()
+	plOCP = bOCP.GetResultOCPValidated()
 	bOCPPluginRes = fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plOCP.Status, plOCP.Total, plOCP.Passed, plOCP.Failed, plOCP.Skipped, plOCP.Timeout)
 	fmt.Fprintf(tbWriter, " - %s\t: %s\t: %s\n", name, pOCPPluginRes, bOCPPluginRes)
 
 	fmt.Fprintf(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " Health summary:\t  [A=True/P=True/D=True]\t\n")
 	fmt.Fprintf(tbWriter, " - Cluster Operators\t: [%d/%d/%d]\t: [%d/%d/%d]\n",
-		pOCP.coCountAvailable, pOCP.coCountProgressing, pOCP.coCountDegraded,
-		bOCP.coCountAvailable, bOCP.coCountProgressing, bOCP.coCountDegraded,
+		pOCP.CoCountAvailable, pOCP.CoCountProgressing, pOCP.CoCountDegraded,
+		bOCP.CoCountAvailable, bOCP.CoCountProgressing, bOCP.CoCountDegraded,
 	)
 
 	pNhMessage := fmt.Sprintf("%d/%d %s", pCL.NodeHealth.Total, pCL.NodeHealth.Total, "")
@@ -195,7 +196,7 @@ func printAggregatedSummary(cs *ConsolidatedSummary) error {
 	return nil
 }
 
-func printSummaryPlugin(p *OPCTPluginSummary) {
+func printSummaryPlugin(p *summary.OPCTPluginSummary) {
 	fmt.Printf(" - %s:\n", p.Name)
 	fmt.Printf("   - Status: %s\n", p.Status)
 	fmt.Printf("   - Total: %d\n", p.Total)
@@ -214,22 +215,22 @@ func printSummaryPlugin(p *OPCTPluginSummary) {
 	fmt.Printf("   - Status After Filters     : %s\n", newStatus)
 }
 
-func printProcessedSummary(cs *ConsolidatedSummary) error {
+func printProcessedSummary(cs *summary.ConsolidatedSummary) error {
 
 	fmt.Printf("\n> Processed Summary <\n")
 
 	fmt.Printf("\n Total Tests suites:\n")
-	fmt.Printf(" - kubernetes/conformance: %d \n", cs.suites.GetTotalK8S())
-	fmt.Printf(" - openshift/conformance: %d \n", cs.suites.GetTotalOCP())
+	fmt.Printf(" - kubernetes/conformance: %d \n", cs.Suites.GetTotalK8S())
+	fmt.Printf(" - openshift/conformance: %d \n", cs.Suites.GetTotalOCP())
 
 	fmt.Printf("\n Total Tests by Certification Layer:\n")
-	printSummaryPlugin(cs.provider.openshift.getResultK8SValidated())
-	printSummaryPlugin(cs.provider.openshift.getResultOCPValidated())
+	printSummaryPlugin(cs.Provider.Openshift.GetResultK8SValidated())
+	printSummaryPlugin(cs.Provider.Openshift.GetResultOCPValidated())
 
 	return nil
 }
 
-func printErrorDetailPlugin(p *OPCTPluginSummary) {
+func printErrorDetailPlugin(p *summary.OPCTPluginSummary) {
 
 	flakeCount := len(p.FailedFilterBaseline) - len(p.FailedFilterFlaky)
 	fmt.Printf("\n\n => %s: (%d failures, %d flakes)\n", p.Name, len(p.FailedFilterBaseline), flakeCount)
@@ -246,18 +247,22 @@ func printErrorDetailPlugin(p *OPCTPluginSummary) {
 	tbWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
 	fmt.Fprintf(tbWriter, "Flakes\tPerc\t TestName\n")
 	for _, test := range p.FailedFilterBaseline {
-		if p.FailedItems[test].Flaky.CurrentFlakes != 0 {
+		// When the was issues to create the flaky item (network connectivity with Sippy API),
+		// fallback to '--' values.
+		if p.FailedItems[test].Flaky == nil {
+			fmt.Fprintf(tbWriter, "--\t--\t%s\n", test)
+		} else if p.FailedItems[test].Flaky.CurrentFlakes != 0 {
 			fmt.Fprintf(tbWriter, "%d\t%.3f%%\t%s\n", p.FailedItems[test].Flaky.CurrentFlakes, p.FailedItems[test].Flaky.CurrentFlakePerc, test)
 		}
 	}
 	tbWriter.Flush()
 }
 
-func printErrorDetails(cs *ConsolidatedSummary) error {
+func printErrorDetails(cs *summary.ConsolidatedSummary) error {
 
 	fmt.Printf("\n Total Tests by Certification Layer: \n")
-	printErrorDetailPlugin(cs.provider.openshift.getResultK8SValidated())
-	printErrorDetailPlugin(cs.provider.openshift.getResultOCPValidated())
+	printErrorDetailPlugin(cs.Provider.Openshift.GetResultK8SValidated())
+	printErrorDetailPlugin(cs.Provider.Openshift.GetResultOCPValidated())
 
 	return nil
 }

@@ -1,4 +1,4 @@
-package process
+package summary
 
 import (
 	"compress/gzip"
@@ -20,10 +20,10 @@ const (
 
 // ResultSummary holds the summary of a single execution
 type ResultSummary struct {
-	name      string
-	archive   string
-	cluster   discovery.ClusterSummary
-	openshift *OpenShiftSummary
+	Name      string
+	Archive   string
+	Cluster   discovery.ClusterSummary
+	Openshift *OpenShiftSummary
 	reader    *results.Reader
 }
 
@@ -82,7 +82,7 @@ func (rs *ResultSummary) getPluginList() ([]string, error) {
 // underlying readers. The cleanup function is guaranteed to never be nil.
 func (rs *ResultSummary) openReader() (func(), error) {
 
-	filepath := rs.archive
+	filepath := rs.Archive
 	fi, err := os.Stat(filepath)
 	if err != nil {
 		rs.reader = nil
@@ -161,7 +161,7 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 		failedList = append(failedList, item.Name)
 	}
 
-	rs.openshift.setPluginResult(&OPCTPluginSummary{
+	rs.Openshift.SetPluginResult(&OPCTPluginSummary{
 		Name:        obj.Name,
 		Status:      obj.Status,
 		Total:       int64(total),
@@ -191,7 +191,7 @@ func (rs *ResultSummary) populateSummary() error {
 
 	// For summary and dump views, get the item as an object to iterate over.
 	err := rs.reader.WalkFiles(func(path string, info os.FileInfo, err error) error {
-		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &rs.cluster)
+		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &rs.Cluster)
 		if err != nil {
 			return err
 		}
@@ -213,9 +213,9 @@ func (rs *ResultSummary) populateSummary() error {
 		return err
 	}
 
-	rs.openshift.setFromInfraCR(&ocpInfra)
-	rs.openshift.setFromCvoCR(&ocpCVO)
-	rs.openshift.setFromCoCR(&ocpCO)
+	rs.Openshift.SetFromInfraCR(&ocpInfra)
+	rs.Openshift.SetFromCvoCR(&ocpCVO)
+	rs.Openshift.SetFromCoCR(&ocpCO)
 
 	return nil
 }

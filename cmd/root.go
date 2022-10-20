@@ -16,7 +16,7 @@ import (
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/run"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/status"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/version"
-	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/cmd/process"
+	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/process"
 )
 
 // rootCmd represents the base command when called without any subcommands
