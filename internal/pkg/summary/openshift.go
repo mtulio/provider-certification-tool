@@ -1,106 +1,107 @@
-package process
+package summary
 
 import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
+	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/sippy"
 )
 
 type OpenShiftSummary struct {
 	// Infra CR
-	infraPlatformType         string
-	infraAPIServerURL         string
-	infraAPIServerURLInternal string
-	infraControlPlaneTopology string
-	infraTopology             string
-	infraName                 string
+	InfraPlatformType         string
+	InfraAPIServerURL         string
+	InfraAPIServerURLInternal string
+	InfraControlPlaneTopology string
+	InfraTopology             string
+	InfraName                 string
 
 	// Plugin Results
-	pluginResultK8sConformance *OPCTPluginSummary
-	pluginResultOCPValidated   *OPCTPluginSummary
+	PluginResultK8sConformance *OPCTPluginSummary
+	PluginResultOCPValidated   *OPCTPluginSummary
 
-	versionOPpctSonobuoy     string
-	versionOpctCli           string
-	versionPluginConformance string
+	VersionOPpctSonobuoy     string
+	VersionOpctCli           string
+	VersionPluginConformance string
 
 	// get from Sonobuoy metadata
-	versionK8S string
+	VersionK8S string
 
 	// CVO (results-partner/resources/cluster/config.openshift.io_v1_clusterversions.json)
-	cvoStatusDesiredVersion   string
-	cvoCondProgressing        string
-	cvoCondProgressingMessage string
+	CvoStatusDesiredVersion   string
+	CvoCondProgressing        string
+	CvoCondProgressingMessage string
 
 	// Cluster Operators (results-partner/resources/cluster/config.openshift.io_v1_clusteroperators.json)
-	coCountAvailable   uint64
-	coCountProgressing uint64
-	coCountDegraded    uint64
+	CoCountAvailable   uint64
+	CoCountProgressing uint64
+	CoCountDegraded    uint64
 }
 
 func NewOpenShiftSummary() *OpenShiftSummary {
 	return &OpenShiftSummary{}
 }
 
-func (os *OpenShiftSummary) setFromInfraCR(cr *OpenShiftCrInfrastructures) {
-	os.infraPlatformType = cr.Items[0].Status.Platform
-	os.infraAPIServerURL = cr.Items[0].Status.APIServerURL
-	os.infraAPIServerURLInternal = cr.Items[0].Status.APIServerInternalURL
-	os.infraControlPlaneTopology = cr.Items[0].Status.ControlPlaneTopology
-	os.infraTopology = cr.Items[0].Status.InfrastructureTopology
-	os.infraName = cr.Items[0].Status.InfrastructureName
+func (os *OpenShiftSummary) SetFromInfraCR(cr *OpenShiftCrInfrastructures) {
+	os.InfraPlatformType = cr.Items[0].Status.Platform
+	os.InfraAPIServerURL = cr.Items[0].Status.APIServerURL
+	os.InfraAPIServerURLInternal = cr.Items[0].Status.APIServerInternalURL
+	os.InfraControlPlaneTopology = cr.Items[0].Status.ControlPlaneTopology
+	os.InfraTopology = cr.Items[0].Status.InfrastructureTopology
+	os.InfraName = cr.Items[0].Status.InfrastructureName
 }
 
-func (os *OpenShiftSummary) setFromCvoCR(cr *OpenShiftCrCvo) {
-	os.cvoStatusDesiredVersion = cr.Items[0].Status.Desired.Version
+func (os *OpenShiftSummary) SetFromCvoCR(cr *OpenShiftCrCvo) {
+	os.CvoStatusDesiredVersion = cr.Items[0].Status.Desired.Version
 	for _, condition := range cr.Items[0].Status.Conditions {
 		if condition.Type == "Progressing" {
-			os.cvoCondProgressing = condition.Status
-			os.cvoCondProgressingMessage = condition.Message
+			os.CvoCondProgressing = condition.Status
+			os.CvoCondProgressingMessage = condition.Message
 		}
 	}
 }
 
-func (os *OpenShiftSummary) setFromCoCR(cr *OpenShiftCrCo) {
+func (os *OpenShiftSummary) SetFromCoCR(cr *OpenShiftCrCo) {
 
 	for _, item := range cr.Items {
 		for _, condition := range item.Status.Conditions {
 			switch condition.Type {
 			case "Available":
 				if condition.Status == "True" {
-					os.coCountAvailable += 1
+					os.CoCountAvailable += 1
 				}
 			case "Progressing":
 				if condition.Status == "True" {
-					os.coCountProgressing += 1
+					os.CoCountProgressing += 1
 				}
 			case "Degraded":
 				if condition.Status == "True" {
-					os.coCountDegraded += 1
+					os.CoCountDegraded += 1
 				}
 			}
 		}
 	}
 }
 
-func (os *OpenShiftSummary) setPluginResult(in *OPCTPluginSummary) {
+func (os *OpenShiftSummary) SetPluginResult(in *OPCTPluginSummary) {
 	switch in.Name {
 	case "openshift-kube-conformance":
-		os.pluginResultK8sConformance = in
+		os.PluginResultK8sConformance = in
 	case "openshift-conformance-validated":
-		os.pluginResultOCPValidated = in
+		os.PluginResultOCPValidated = in
 	default:
 		fmt.Println("ERROR: plugin not found")
 	}
 	return
 }
 
-func (os *OpenShiftSummary) getResultOCPValidated() *OPCTPluginSummary {
-	return os.pluginResultOCPValidated
+func (os *OpenShiftSummary) GetResultOCPValidated() *OPCTPluginSummary {
+	return os.PluginResultOCPValidated
 }
 
-func (os *OpenShiftSummary) getResultK8SValidated() *OPCTPluginSummary {
-	return os.pluginResultK8sConformance
+func (os *OpenShiftSummary) GetResultK8SValidated() *OPCTPluginSummary {
+	return os.PluginResultK8sConformance
 }
 
 // OPCT
@@ -135,50 +136,50 @@ type PluginFailedItem struct {
 	// Offset is the offset of failure from the plugin result file
 	Offset int
 	// Flaky contains the flaky information from OpenShift CI - scraped from Sippy API
-	Flaky *SippyTestsResponse
+	Flaky *sippy.SippyTestsResponse
 }
 
-type openshiftTestsSuites struct {
-	kubernetesConformance *openshiftTestsSuite
-	openshiftConformance  *openshiftTestsSuite
+type OpenshiftTestsSuites struct {
+	KubernetesConformance *OpenshiftTestsSuite
+	OpenshiftConformance  *OpenshiftTestsSuite
 }
 
-func (ts *openshiftTestsSuites) LoadAll() error {
-	err := ts.openshiftConformance.Load()
+func (ts *OpenshiftTestsSuites) LoadAll() error {
+	err := ts.OpenshiftConformance.Load()
 	if err != nil {
 		return err
 	}
-	err = ts.kubernetesConformance.Load()
+	err = ts.KubernetesConformance.Load()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ts *openshiftTestsSuites) GetTotalOCP() int {
-	return ts.openshiftConformance.Count
+func (ts *OpenshiftTestsSuites) GetTotalOCP() int {
+	return ts.OpenshiftConformance.Count
 }
 
-func (ts *openshiftTestsSuites) GetTotalK8S() int {
-	return ts.kubernetesConformance.Count
+func (ts *OpenshiftTestsSuites) GetTotalK8S() int {
+	return ts.KubernetesConformance.Count
 }
 
-type openshiftTestsSuite struct {
-	inputFile string
-	name      string
+type OpenshiftTestsSuite struct {
+	InputFile string
+	Name      string
 	Count     int
-	tests     []string
+	Tests     []string
 }
 
-func (s *openshiftTestsSuite) Load() error {
-	content, err := os.ReadFile(s.inputFile)
+func (s *OpenshiftTestsSuite) Load() error {
+	content, err := os.ReadFile(s.InputFile)
 	if err != nil {
 		log.Fatal(err)
 		return err
 	}
 
-	s.tests = strings.Split(string(content), "\n")
-	s.Count = len(s.tests)
+	s.Tests = strings.Split(string(content), "\n")
+	s.Count = len(s.Tests)
 	return nil
 }
 

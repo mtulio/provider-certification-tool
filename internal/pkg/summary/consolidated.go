@@ -1,4 +1,4 @@
-package process
+package summary
 
 import (
 	"bufio"
@@ -11,32 +11,33 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/xuri/excelize/v2"
+	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/sippy"
 )
 
 // ConsolidatedSummary Aggregate the results of provider and baseline
 type ConsolidatedSummary struct {
-	provider *ResultSummary
-	baseline *ResultSummary
-	suites   *openshiftTestsSuites
+	Provider *ResultSummary
+	Baseline *ResultSummary
+	Suites   *OpenshiftTestsSuites
 }
 
 func (cs *ConsolidatedSummary) Process() error {
 
 	// Load Result Summary from Archives
-	err := cs.provider.Populate()
+	err := cs.Provider.Populate()
 	if err != nil {
 		fmt.Println("ERROR processing provider results...")
 		return err
 	}
 
-	err = cs.baseline.Populate()
+	err = cs.Baseline.Populate()
 	if err != nil {
 		fmt.Println("ERROR processing baseline results...")
 		return err
 	}
 
 	// Load Tests for each suites
-	err = cs.suites.LoadAll()
+	err = cs.Suites.LoadAll()
 	if err != nil {
 		return err
 	}
@@ -85,11 +86,11 @@ func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
 
 	switch plugin {
 	case "kubernetes-conformance":
-		e2eSuite = cs.suites.kubernetesConformance.tests
-		e2eFailures = cs.provider.openshift.pluginResultK8sConformance.FailedList
+		e2eSuite = cs.Suites.KubernetesConformance.Tests
+		e2eFailures = cs.Provider.Openshift.PluginResultK8sConformance.FailedList
 	case "openshift-validated":
-		e2eSuite = cs.suites.openshiftConformance.tests
-		e2eFailures = cs.provider.openshift.pluginResultOCPValidated.FailedList
+		e2eSuite = cs.Suites.OpenshiftConformance.Tests
+		e2eFailures = cs.Provider.Openshift.PluginResultOCPValidated.FailedList
 	default:
 		fmt.Println("Suite not found!\n")
 	}
@@ -107,9 +108,9 @@ func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
 
 	switch plugin {
 	case "kubernetes-conformance":
-		cs.provider.openshift.pluginResultK8sConformance.FailedFilterSuite = e2eFailuresFiltered
+		cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterSuite = e2eFailuresFiltered
 	case "openshift-validated":
-		cs.provider.openshift.pluginResultOCPValidated.FailedFilterSuite = e2eFailuresFiltered
+		cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterSuite = e2eFailuresFiltered
 	default:
 		fmt.Println("Suite not found!\n")
 	}
@@ -143,11 +144,11 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 
 	switch plugin {
 	case "kubernetes-conformance":
-		e2eFailuresProvider = cs.provider.openshift.pluginResultK8sConformance.FailedFilterSuite
-		e2eFailuresBaseline = cs.baseline.openshift.pluginResultK8sConformance.FailedList
+		e2eFailuresProvider = cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterSuite
+		e2eFailuresBaseline = cs.Baseline.Openshift.PluginResultK8sConformance.FailedList
 	case "openshift-validated":
-		e2eFailuresProvider = cs.provider.openshift.pluginResultOCPValidated.FailedFilterSuite
-		e2eFailuresBaseline = cs.baseline.openshift.pluginResultOCPValidated.FailedList
+		e2eFailuresProvider = cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterSuite
+		e2eFailuresBaseline = cs.Baseline.Openshift.PluginResultOCPValidated.FailedList
 	default:
 		return errors.New("Unable to get current failures: Suite not found to apply filter: Baseline")
 	}
@@ -165,9 +166,9 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 
 	switch plugin {
 	case "kubernetes-conformance":
-		cs.provider.openshift.pluginResultK8sConformance.FailedFilterBaseline = e2eFailuresFiltered
+		cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterBaseline = e2eFailuresFiltered
 	case "openshift-validated":
-		cs.provider.openshift.pluginResultOCPValidated.FailedFilterBaseline = e2eFailuresFiltered
+		cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterBaseline = e2eFailuresFiltered
 	default:
 		return errors.New("Unable to save filetered failures: Suite not found to apply filter: Baseline")
 	}
@@ -199,19 +200,19 @@ func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
 
 	switch plugin {
 	case "kubernetes-conformance":
-		ps = cs.provider.openshift.pluginResultK8sConformance
+		ps = cs.Provider.Openshift.PluginResultK8sConformance
 	case "openshift-validated":
-		ps = cs.provider.openshift.pluginResultOCPValidated
+		ps = cs.Provider.Openshift.PluginResultOCPValidated
 	default:
 		return errors.New("Suite not found to apply filter: Flaky")
 	}
 
 	// TODO: define if we will check for flakes for all failures or only filtered
 	// Query Flaky only the FilteredBaseline to avoid many external queries.
-	api := NewSippyAPI()
+	api := sippy.NewSippyAPI()
 	for _, name := range ps.FailedFilterBaseline {
 
-		resp, err := api.QueryTests(&SippyTestsRequestInput{TestName: name})
+		resp, err := api.QueryTests(&sippy.SippyTestsRequestInput{TestName: name})
 		if err != nil {
 			log.Errorf("#> Error querying to Sippy API: %v", err)
 			continue
@@ -249,75 +250,75 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	// Save Provider failures
 	suite := "kubernetes-conformance"
 	filename := fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedList); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedList); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedList); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedList); err != nil {
 		return err
 	}
 
 	// Save Provider failures with filter: Suite (only)
 	suite = "kubernetes-conformance"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterSuite); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterSuite); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterSuite); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterSuite); err != nil {
 		return err
 	}
 
 	// Save Provider failures with filter: Baseline exclusion
 	suite = "kubernetes-conformance"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
 
 	// Save Provider failures with filter: Flaky
 	suite = "kubernetes-conformance"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterFlaky); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterFlaky); err != nil {
 		return err
 	}
 	// Save the Providers failures for the latest filter.
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterFlaky); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterFlaky); err != nil {
 		return err
 	}
 	// Save the Providers failures for the latest filter.
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline); err != nil {
+	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline); err != nil {
 		return err
 	}
 
 	// save baseline failures
 	suite = "kubernetes-conformance"
 	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.baseline.openshift.getResultK8SValidated().FailedList); err != nil {
+	if err := writeFileTestList(filename, cs.Baseline.Openshift.GetResultK8SValidated().FailedList); err != nil {
 		return err
 	}
 
 	suite = "openshift-validated"
 	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.baseline.openshift.getResultOCPValidated().FailedList); err != nil {
+	if err := writeFileTestList(filename, cs.Baseline.Openshift.GetResultOCPValidated().FailedList); err != nil {
 		return err
 	}
 
@@ -342,8 +343,8 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 
 	suite = "kubernetes-conformance"
 	subPrefix := fmt.Sprintf("%s/%s", subdir, suite)
-	errItems := cs.provider.openshift.getResultK8SValidated().FailedItems
-	errList := cs.provider.openshift.getResultK8SValidated().FailedFilterBaseline
+	errItems := cs.Provider.Openshift.GetResultK8SValidated().FailedItems
+	errList := cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
@@ -354,8 +355,8 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 
 	suite = "openshift-validated"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.provider.openshift.getResultOCPValidated().FailedItems
-	errList = cs.provider.openshift.getResultOCPValidated().FailedFilterBaseline
+	errItems = cs.Provider.Openshift.GetResultOCPValidated().FailedItems
+	errList = cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
@@ -376,8 +377,8 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 
 	suite = "kubernetes-conformance"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.provider.openshift.getResultK8SValidated().FailedItems
-	errList = cs.provider.openshift.getResultK8SValidated().FailedList
+	errItems = cs.Provider.Openshift.GetResultK8SValidated().FailedItems
+	errList = cs.Provider.Openshift.GetResultK8SValidated().FailedList
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
@@ -388,8 +389,8 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 
 	suite = "openshift-validated"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.provider.openshift.getResultOCPValidated().FailedItems
-	errList = cs.provider.openshift.getResultOCPValidated().FailedList
+	errItems = cs.Provider.Openshift.GetResultOCPValidated().FailedItems
+	errList = cs.Provider.Openshift.GetResultOCPValidated().FailedList
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
@@ -412,8 +413,8 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 
 	suite = "kubernetes-conformance"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.baseline.openshift.getResultK8SValidated().FailedItems
-	errList = cs.baseline.openshift.getResultK8SValidated().FailedList
+	errItems = cs.Baseline.Openshift.GetResultK8SValidated().FailedItems
+	errList = cs.Baseline.Openshift.GetResultK8SValidated().FailedList
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
@@ -424,8 +425,8 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 
 	suite = "openshift-validated"
 	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.baseline.openshift.getResultOCPValidated().FailedItems
-	errList = cs.baseline.openshift.getResultOCPValidated().FailedList
+	errItems = cs.Baseline.Openshift.GetResultOCPValidated().FailedItems
+	errList = cs.Baseline.Openshift.GetResultOCPValidated().FailedList
 	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
 		return err
 	}
@@ -436,12 +437,12 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	// for each suite: save test list
 	suite = "kubernetes-conformance"
 	filename = fmt.Sprintf("%s/%s_%s_suite_full.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.suites.kubernetesConformance.tests); err != nil {
+	if err := writeFileTestList(filename, cs.Suites.KubernetesConformance.Tests); err != nil {
 		return err
 	}
 	suite = "openshift-validated"
 	filename = fmt.Sprintf("%s/%s_%s_suite_full.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.suites.kubernetesConformance.tests); err != nil {
+	if err := writeFileTestList(filename, cs.Suites.KubernetesConformance.Tests); err != nil {
 		return err
 	}
 
