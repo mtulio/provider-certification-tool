@@ -1,9 +1,14 @@
 package summary
 
 import (
+	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
-	log "github.com/sirupsen/logrus"
+)
+
+const (
+	SuiteNameKubernetesConformance = "kubernetes/conformance"
+	SuiteNameOpenshiftConformance  = "openshift/conformance"
 )
 
 type OpenshiftTestsSuites struct {

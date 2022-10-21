@@ -10,8 +10,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/xuri/excelize/v2"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/sippy"
+	"github.com/xuri/excelize/v2"
 )
 
 // ConsolidatedSummary Aggregate the results of provider and baseline
@@ -64,12 +64,12 @@ func (cs *ConsolidatedSummary) Process() error {
 // applyFilterSuite process the FailedList for each plugin, getting **intersection** tests
 // for respective suite.
 func (cs *ConsolidatedSummary) applyFilterSuite() error {
-	err := cs.applyFilterSuiteForPlugin("kubernetes-conformance")
+	err := cs.applyFilterSuiteForPlugin(CertPluginNameKubernetesConformance)
 	if err != nil {
 		return err
 	}
 
-	err = cs.applyFilterSuiteForPlugin("openshift-validated")
+	err = cs.applyFilterSuiteForPlugin(CertPluginNameOpenshiftValidated)
 	if err != nil {
 		return err
 	}
@@ -79,21 +79,22 @@ func (cs *ConsolidatedSummary) applyFilterSuite() error {
 
 // applyFilterSuiteForPlugin calculates the intersection of Provider Failed AND suite
 func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
-	var e2eSuite []string
-	var e2eFailures []string
-	var e2eFailuresFiltered []string
-	hashSuite := make(map[string]struct{})
+
+	var resultsProvider *OPCTPluginSummary
+	var pluginSuite *OpenshiftTestsSuite
 
 	switch plugin {
-	case "kubernetes-conformance":
-		e2eSuite = cs.Suites.KubernetesConformance.Tests
-		e2eFailures = cs.Provider.Openshift.PluginResultK8sConformance.FailedList
-	case "openshift-validated":
-		e2eSuite = cs.Suites.OpenshiftConformance.Tests
-		e2eFailures = cs.Provider.Openshift.PluginResultOCPValidated.FailedList
-	default:
-		fmt.Println("Suite not found!\n")
+	case CertPluginNameKubernetesConformance:
+		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
+		pluginSuite = cs.Suites.KubernetesConformance
+	case CertPluginNameOpenshiftValidated:
+		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
+		pluginSuite = cs.Suites.OpenshiftConformance
 	}
+
+	e2eFailures := resultsProvider.FailedList
+	e2eSuite := pluginSuite.Tests
+	hashSuite := make(map[string]struct{}, len(e2eSuite))
 
 	for _, v := range e2eSuite {
 		hashSuite[v] = struct{}{}
@@ -101,32 +102,22 @@ func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
 
 	for _, v := range e2eFailures {
 		if _, ok := hashSuite[v]; ok {
-			e2eFailuresFiltered = append(e2eFailuresFiltered, v)
+			resultsProvider.FailedFilterSuite = append(resultsProvider.FailedFilterSuite, v)
 		}
 	}
-	sort.Strings(e2eFailuresFiltered)
-
-	switch plugin {
-	case "kubernetes-conformance":
-		cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterSuite = e2eFailuresFiltered
-	case "openshift-validated":
-		cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterSuite = e2eFailuresFiltered
-	default:
-		fmt.Println("Suite not found!\n")
-	}
-
+	sort.Strings(resultsProvider.FailedFilterSuite)
 	return nil
 }
 
 // applyFilterBaseline process the FailedFilterSuite for each plugin, **excluding** failures from
 // baseline test.
 func (cs *ConsolidatedSummary) applyFilterBaseline() error {
-	err := cs.applyFilterBaselineForPlugin("kubernetes-conformance")
+	err := cs.applyFilterBaselineForPlugin(CertPluginNameKubernetesConformance)
 	if err != nil {
 		return err
 	}
 
-	err = cs.applyFilterBaselineForPlugin("openshift-validated")
+	err = cs.applyFilterBaselineForPlugin(CertPluginNameOpenshiftValidated)
 	if err != nil {
 		return err
 	}
@@ -143,10 +134,10 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 	hashBaseline := make(map[string]struct{})
 
 	switch plugin {
-	case "kubernetes-conformance":
+	case CertPluginNameKubernetesConformance:
 		e2eFailuresProvider = cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterSuite
 		e2eFailuresBaseline = cs.Baseline.Openshift.PluginResultK8sConformance.FailedList
-	case "openshift-validated":
+	case CertPluginNameOpenshiftValidated:
 		e2eFailuresProvider = cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterSuite
 		e2eFailuresBaseline = cs.Baseline.Openshift.PluginResultOCPValidated.FailedList
 	default:
@@ -165,9 +156,9 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 	sort.Strings(e2eFailuresFiltered)
 
 	switch plugin {
-	case "kubernetes-conformance":
+	case CertPluginNameKubernetesConformance:
 		cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterBaseline = e2eFailuresFiltered
-	case "openshift-validated":
+	case CertPluginNameOpenshiftValidated:
 		cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterBaseline = e2eFailuresFiltered
 	default:
 		return errors.New("Unable to save filetered failures: Suite not found to apply filter: Baseline")
@@ -179,12 +170,12 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 // applyFilterFlaky process the FailedFilterSuite for each plugin, **excluding** failures from
 // baseline test.
 func (cs *ConsolidatedSummary) applyFilterFlaky() error {
-	err := cs.applyFilterFlakyForPlugin("kubernetes-conformance")
+	err := cs.applyFilterFlakyForPlugin(CertPluginNameKubernetesConformance)
 	if err != nil {
 		return err
 	}
 
-	err = cs.applyFilterFlakyForPlugin("openshift-validated")
+	err = cs.applyFilterFlakyForPlugin(CertPluginNameOpenshiftValidated)
 	if err != nil {
 		return err
 	}
@@ -199,9 +190,9 @@ func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
 	var ps *OPCTPluginSummary
 
 	switch plugin {
-	case "kubernetes-conformance":
+	case CertPluginNameKubernetesConformance:
 		ps = cs.Provider.Openshift.PluginResultK8sConformance
-	case "openshift-validated":
+	case CertPluginNameOpenshiftValidated:
 		ps = cs.Provider.Openshift.PluginResultOCPValidated
 	default:
 		return errors.New("Suite not found to apply filter: Flaky")
@@ -247,11 +238,11 @@ func (cs *ConsolidatedSummary) saveResultsPlugin(path, plugin string) error {
 	var prefix = "tests"
 
 	switch plugin {
-	case "kubernetes-conformance":
+	case CertPluginNameKubernetesConformance:
 		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
 		resultsBaseline = cs.Baseline.Openshift.GetResultK8SValidated()
 		suite = cs.Suites.KubernetesConformance
-	case "openshift-validated":
+	case CertPluginNameOpenshiftValidated:
 		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
 		resultsBaseline = cs.Baseline.Openshift.GetResultOCPValidated()
 		suite = cs.Suites.OpenshiftConformance
@@ -309,10 +300,10 @@ func (cs *ConsolidatedSummary) extractFailuresDetailsByPlugin(path, plugin strin
 	ignoreExistingDir := true
 
 	switch plugin {
-	case "kubernetes-conformance":
+	case CertPluginNameKubernetesConformance:
 		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
 		resultsBaseline = cs.Baseline.Openshift.GetResultK8SValidated()
-	case "openshift-validated":
+	case CertPluginNameOpenshiftValidated:
 		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
 		resultsBaseline = cs.Baseline.Openshift.GetResultOCPValidated()
 	}
@@ -362,7 +353,6 @@ func (cs *ConsolidatedSummary) extractFailuresDetailsByPlugin(path, plugin strin
 func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 
 	var rowN int64
-	var suite string
 	var errList []string
 
 	sheet := excelize.NewFile()
@@ -374,15 +364,14 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
 	} else {
-		suite = "kubernetes-conformance"
 		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline
 		rowN = 2
-		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+		if err := populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN); err != nil {
 			log.Error(err)
 		}
-		suite = "openshift-validated"
+
 		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline
-		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+		if err := populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN); err != nil {
 			log.Error(err)
 		}
 	}
@@ -392,15 +381,14 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
 	} else {
-		suite = "kubernetes-conformance"
 		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedList
 		rowN = 2
-		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+		if err := populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN); err != nil {
 			log.Error(err)
 		}
-		suite = "openshift-validated"
+
 		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedList
-		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+		if err := populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN); err != nil {
 			log.Error(err)
 		}
 	}
@@ -410,15 +398,14 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
 	} else {
-		suite = "kubernetes-conformance"
 		errList = cs.Baseline.Openshift.GetResultK8SValidated().FailedList
 		rowN = 2
-		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+		if err := populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN); err != nil {
 			log.Error(err)
 		}
-		suite = "openshift-validated"
+
 		errList = cs.Baseline.Openshift.GetResultOCPValidated().FailedList
-		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+		if err := populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN); err != nil {
 			log.Error(err)
 		}
 	}
@@ -434,18 +421,18 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	}
 
 	// Save the list of failures into individual files by Plugin
-	if err := cs.saveResultsPlugin(path, "kubernetes-conformance"); err != nil {
+	if err := cs.saveResultsPlugin(path, CertPluginNameKubernetesConformance); err != nil {
 		return err
 	}
-	if err := cs.saveResultsPlugin(path, "openshift-validated"); err != nil {
+	if err := cs.saveResultsPlugin(path, CertPluginNameOpenshiftValidated); err != nil {
 		return err
 	}
 
 	// Extract errors details to sub directories
-	if err := cs.extractFailuresDetailsByPlugin(path, "kubernetes-conformance"); err != nil {
+	if err := cs.extractFailuresDetailsByPlugin(path, CertPluginNameKubernetesConformance); err != nil {
 		return err
 	}
-	if err := cs.extractFailuresDetailsByPlugin(path, "openshift-validated"); err != nil {
+	if err := cs.extractFailuresDetailsByPlugin(path, CertPluginNameOpenshiftValidated); err != nil {
 		return err
 	}
 

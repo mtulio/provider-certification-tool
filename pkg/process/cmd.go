@@ -7,9 +7,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/summary"
 	"github.com/vmware-tanzu/sonobuoy/pkg/errlog"
 	"text/tabwriter"
-	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/summary"
 )
 
 type Input struct {
@@ -220,8 +220,8 @@ func printProcessedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Printf("\n> Processed Summary <\n")
 
 	fmt.Printf("\n Total Tests suites:\n")
-	fmt.Printf(" - kubernetes/conformance: %d \n", cs.Suites.GetTotalK8S())
-	fmt.Printf(" - openshift/conformance: %d \n", cs.Suites.GetTotalOCP())
+	fmt.Printf(" - %s: %d \n", summary.SuiteNameKubernetesConformance, cs.Suites.GetTotalK8S())
+	fmt.Printf(" - %s: %d \n", summary.SuiteNameOpenshiftConformance, cs.Suites.GetTotalOCP())
 
 	fmt.Printf("\n Total Tests by Certification Layer:\n")
 	printSummaryPlugin(cs.Provider.Openshift.GetResultK8SValidated())

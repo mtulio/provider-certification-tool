@@ -161,7 +161,7 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 		failedList = append(failedList, item.Name)
 	}
 
-	rs.Openshift.SetPluginResult(&OPCTPluginSummary{
+	if err := rs.Openshift.SetPluginResult(&OPCTPluginSummary{
 		Name:        obj.Name,
 		Status:      obj.Status,
 		Total:       int64(total),
@@ -171,7 +171,9 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 		Skipped:     int64(statusCounts[results.StatusSkipped]),
 		FailedList:  failedList,
 		FailedItems: failedItems,
-	})
+	}); err != nil {
+		return err
+	}
 
 	delete(statusCounts, results.StatusPassed)
 	delete(statusCounts, results.StatusFailed)
@@ -213,9 +215,15 @@ func (rs *ResultSummary) populateSummary() error {
 		return err
 	}
 
-	rs.Openshift.SetFromInfraCR(&ocpInfra)
-	rs.Openshift.SetFromCvoCR(&ocpCVO)
-	rs.Openshift.SetFromCoCR(&ocpCO)
+	if err := rs.Openshift.SetFromInfraCR(&ocpInfra); err != nil {
+		return err
+	}
+	if err := rs.Openshift.SetFromCvoCR(&ocpCVO); err != nil {
+		return err
+	}
+	if err := rs.Openshift.SetFromCoCR(&ocpCO); err != nil {
+		return err
+	}
 
 	return nil
 }
