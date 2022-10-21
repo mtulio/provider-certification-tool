@@ -2,6 +2,15 @@ package summary
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
+)
+
+const (
+	ConditionTypeProgressing = "Progressing"
+	ConditionTypeAvailable   = "Available"
+	ConditionTypeDegraded    = "Degraded"
+	ConditionStatusTrue      = "True"
+	ConditionStatusFalse     = "False"
 )
 
 type OpenShiftSummary struct {
@@ -39,57 +48,65 @@ func NewOpenShiftSummary() *OpenShiftSummary {
 	return &OpenShiftSummary{}
 }
 
-func (os *OpenShiftSummary) SetFromInfraCR(cr *OpenShiftCrInfrastructures) {
+func (os *OpenShiftSummary) SetFromInfraCR(cr *OpenShiftCrInfrastructures) error {
+	if len(cr.Items) == 0 {
+		return errors.New("Unable to find result Items to set Infrastructures")
+	}
 	os.InfraPlatformType = cr.Items[0].Status.Platform
 	os.InfraAPIServerURL = cr.Items[0].Status.APIServerURL
 	os.InfraAPIServerURLInternal = cr.Items[0].Status.APIServerInternalURL
 	os.InfraControlPlaneTopology = cr.Items[0].Status.ControlPlaneTopology
 	os.InfraTopology = cr.Items[0].Status.InfrastructureTopology
 	os.InfraName = cr.Items[0].Status.InfrastructureName
+	return nil
 }
 
-func (os *OpenShiftSummary) SetFromCvoCR(cr *OpenShiftCrCvo) {
+func (os *OpenShiftSummary) SetFromCvoCR(cr *OpenShiftCrCvo) error {
+	if len(cr.Items) == 0 {
+		return errors.New("Unable to find result Items to set Infrastructures")
+	}
 	os.CvoStatusDesiredVersion = cr.Items[0].Status.Desired.Version
 	for _, condition := range cr.Items[0].Status.Conditions {
-		if condition.Type == "Progressing" {
+		if condition.Type == ConditionTypeProgressing {
 			os.CvoCondProgressing = condition.Status
 			os.CvoCondProgressingMessage = condition.Message
 		}
 	}
+	return nil
 }
 
-func (os *OpenShiftSummary) SetFromCoCR(cr *OpenShiftCrCo) {
-
+func (os *OpenShiftSummary) SetFromCoCR(cr *OpenShiftCrCo) error {
 	for _, item := range cr.Items {
 		for _, condition := range item.Status.Conditions {
 			switch condition.Type {
-			case "Available":
-				if condition.Status == "True" {
+			case ConditionTypeAvailable:
+				if condition.Status == ConditionStatusTrue {
 					os.CoCountAvailable += 1
 				}
-			case "Progressing":
-				if condition.Status == "True" {
+			case ConditionTypeProgressing:
+				if condition.Status == ConditionStatusTrue {
 					os.CoCountProgressing += 1
 				}
-			case "Degraded":
-				if condition.Status == "True" {
+			case ConditionTypeDegraded:
+				if condition.Status == ConditionStatusTrue {
 					os.CoCountDegraded += 1
 				}
 			}
 		}
 	}
+	return nil
 }
 
-func (os *OpenShiftSummary) SetPluginResult(in *OPCTPluginSummary) {
+func (os *OpenShiftSummary) SetPluginResult(in *OPCTPluginSummary) error {
 	switch in.Name {
-	case "openshift-kube-conformance":
+	case CertPluginNameKubernetesConformance:
 		os.PluginResultK8sConformance = in
-	case "openshift-conformance-validated":
+	case CertPluginNameOpenshiftValidated:
 		os.PluginResultOCPValidated = in
 	default:
-		fmt.Println("ERROR: plugin not found")
+		return fmt.Errorf("Unable to Set Plugin results: Plugin not found: %s", in.Name)
 	}
-	return
+	return nil
 }
 
 func (os *OpenShiftSummary) GetResultOCPValidated() *OPCTPluginSummary {

@@ -4,6 +4,11 @@ import (
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/sippy"
 )
 
+const (
+	CertPluginNameKubernetesConformance = "openshift-kube-conformance"
+	CertPluginNameOpenshiftValidated    = "openshift-conformance-validated"
+)
+
 // OPCT
 type OPCTPluginSummary struct {
 	Name    string

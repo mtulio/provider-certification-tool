@@ -66,11 +66,7 @@ func init() {
 	rootCmd.AddCommand(run.NewCmdRun())
 	rootCmd.AddCommand(status.NewCmdStatus())
 	rootCmd.AddCommand(version.NewCmdVersion())
-
-	// introduce two new commands
-	// report: will use results as a backend to apply OPCT rules to filter flakies
 	rootCmd.AddCommand(process.NewCmdProcess())
-	// submit: ??
 
 	// Link in child commands direct from Sonobuoy
 	rootCmd.AddCommand(app.NewSonobuoyCommand())
