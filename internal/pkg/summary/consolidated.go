@@ -450,6 +450,7 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 	return nil
 }
 
+// writeFileTestList saves the list of test names to a new text file
 func writeFileTestList(filename string, data []string) error {
 	fd, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer fd.Close()
@@ -471,6 +472,8 @@ func writeFileTestList(filename string, data []string) error {
 	return nil
 }
 
+// extractTestErrors dumps the test error, summary and stdout, to be saved
+// to individual files.
 func extractTestErrors(prefix string, items map[string]*PluginFailedItem, failures []string) error {
 
 	for idx, line := range failures {
@@ -492,6 +495,7 @@ func extractTestErrors(prefix string, items map[string]*PluginFailedItem, failur
 	return nil
 }
 
+// writeErrorToFile save the entire buffer to individual file.
 func writeErrorToFile(file, data string) error {
 	fd, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer fd.Close()
@@ -511,6 +515,7 @@ func writeErrorToFile(file, data string) error {
 	return nil
 }
 
+// createDir checks if the directory exists, if not creates it, otherwise log and return error
 func createDir(path string) error {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		log.Errorf("ERROR: Directory already exists [%s]: %v", path, err)
@@ -524,6 +529,7 @@ func createDir(path string) error {
 	return nil
 }
 
+// createSheet creates the excel spreadsheet headers
 func createSheet(sheet *excelize.File, sheeName string) error {
 	header := map[string]string{
 		"A1": "Plugin", "B1": "Index", "C1": "Error_Directory",
@@ -537,7 +543,7 @@ func createSheet(sheet *excelize.File, sheeName string) error {
 	return nil
 }
 
-// populateGsheet fill each row per error item
+// populateGsheet fill each row per error item.
 func populateGsheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) error {
 
 	for k, v := range list {
@@ -553,6 +559,7 @@ func populateGsheet(sheet *excelize.File, sheeName, suite string, list []string,
 	return nil
 }
 
+// save the excel sheet to the disk.
 func saveSheet(sheet *excelize.File, sheetFileName string) {
 	if err := sheet.SaveAs(sheetFileName); err != nil {
 		log.Error(err)

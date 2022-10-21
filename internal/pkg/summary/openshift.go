@@ -2,10 +2,6 @@ package summary
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"os"
-	"strings"
-	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/sippy"
 )
 
 type OpenShiftSummary struct {
@@ -102,85 +98,6 @@ func (os *OpenShiftSummary) GetResultOCPValidated() *OPCTPluginSummary {
 
 func (os *OpenShiftSummary) GetResultK8SValidated() *OPCTPluginSummary {
 	return os.PluginResultK8sConformance
-}
-
-// OPCT
-type OPCTPluginSummary struct {
-	Name    string
-	Status  string
-	Total   int64
-	Passed  int64
-	Failed  int64
-	Timeout int64
-	Skipped int64
-
-	// FailedItems is the map with details for each failure
-	FailedItems map[string]*PluginFailedItem
-	// FailedList is the list of tests failures on the original execution
-	FailedList []string
-	// FailedFilterSuite is the list of failures (A) included only in the original suite (B): A INTERSECTION B
-	FailedFilterSuite []string
-	// FailedFilterBaseline is the list of failures (A) excluding the baseline(B): A EXCLUDE B
-	FailedFilterBaseline []string
-	// FailedFilteFlaky is the list of failures with no Flakes on OpenShift CI
-	FailedFilterFlaky []string
-}
-
-type PluginFailedItem struct {
-	// Name is the name of the e2e test
-	Name string
-	// Failure contains the failure reason extracted from JUnit field 'item.detials.failure'
-	Failure string
-	// SystemOut contains the entire test stdout extracted from JUnit field 'item.detials.system-out'
-	SystemOut string
-	// Offset is the offset of failure from the plugin result file
-	Offset int
-	// Flaky contains the flaky information from OpenShift CI - scraped from Sippy API
-	Flaky *sippy.SippyTestsResponse
-}
-
-type OpenshiftTestsSuites struct {
-	KubernetesConformance *OpenshiftTestsSuite
-	OpenshiftConformance  *OpenshiftTestsSuite
-}
-
-func (ts *OpenshiftTestsSuites) LoadAll() error {
-	err := ts.OpenshiftConformance.Load()
-	if err != nil {
-		return err
-	}
-	err = ts.KubernetesConformance.Load()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (ts *OpenshiftTestsSuites) GetTotalOCP() int {
-	return ts.OpenshiftConformance.Count
-}
-
-func (ts *OpenshiftTestsSuites) GetTotalK8S() int {
-	return ts.KubernetesConformance.Count
-}
-
-type OpenshiftTestsSuite struct {
-	InputFile string
-	Name      string
-	Count     int
-	Tests     []string
-}
-
-func (s *OpenshiftTestsSuite) Load() error {
-	content, err := os.ReadFile(s.InputFile)
-	if err != nil {
-		log.Fatal(err)
-		return err
-	}
-
-	s.Tests = strings.Split(string(content), "\n")
-	s.Count = len(s.Tests)
-	return nil
 }
 
 // OpenShift CRs
