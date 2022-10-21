@@ -239,210 +239,218 @@ func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
 	return nil
 }
 
-func (cs *ConsolidatedSummary) SaveResults(path string) error {
+func (cs *ConsolidatedSummary) saveResultsPlugin(path, plugin string) error {
 
-	if err := createDir(path); err != nil {
-		return err
+	var resultsProvider *OPCTPluginSummary
+	var resultsBaseline *OPCTPluginSummary
+	var suite *OpenshiftTestsSuite
+	var prefix = "tests"
+
+	switch plugin {
+	case "kubernetes-conformance":
+		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
+		resultsBaseline = cs.Baseline.Openshift.GetResultK8SValidated()
+		suite = cs.Suites.KubernetesConformance
+	case "openshift-validated":
+		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
+		resultsBaseline = cs.Baseline.Openshift.GetResultOCPValidated()
+		suite = cs.Suites.OpenshiftConformance
 	}
-	prefix := "tests"
 
-	// for each plugin:
 	// Save Provider failures
-	suite := "kubernetes-conformance"
-	filename := fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedList); err != nil {
-		return err
-	}
-
-	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedList); err != nil {
+	filename := fmt.Sprintf("%s/%s_%s_provider_failures-1-ini.txt", path, prefix, plugin)
+	if err := writeFileTestList(filename, resultsProvider.FailedList); err != nil {
 		return err
 	}
 
 	// Save Provider failures with filter: Suite (only)
-	suite = "kubernetes-conformance"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterSuite); err != nil {
-		return err
-	}
-
-	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterSuite); err != nil {
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-2-filter1_suite.txt", path, prefix, plugin)
+	if err := writeFileTestList(filename, resultsProvider.FailedFilterSuite); err != nil {
 		return err
 	}
 
 	// Save Provider failures with filter: Baseline exclusion
-	suite = "kubernetes-conformance"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline); err != nil {
-		return err
-	}
-
-	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline); err != nil {
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-3-filter2_baseline.txt", path, prefix, plugin)
+	if err := writeFileTestList(filename, resultsProvider.FailedFilterBaseline); err != nil {
 		return err
 	}
 
 	// Save Provider failures with filter: Flaky
-	suite = "kubernetes-conformance"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterFlaky); err != nil {
-		return err
-	}
-	// Save the Providers failures for the latest filter.
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline); err != nil {
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, plugin)
+	if err := writeFileTestList(filename, resultsProvider.FailedFilterFlaky); err != nil {
 		return err
 	}
 
-	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterFlaky); err != nil {
-		return err
-	}
-	// Save the Providers failures for the latest filter.
-	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline); err != nil {
+	// Save the Providers failures for the latest filter to review (focus on this)
+	filename = fmt.Sprintf("%s/%s_%s_provider_failures.txt", path, prefix, plugin)
+	if err := writeFileTestList(filename, resultsProvider.FailedFilterBaseline); err != nil {
 		return err
 	}
 
-	// save baseline failures
-	suite = "kubernetes-conformance"
-	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Baseline.Openshift.GetResultK8SValidated().FailedList); err != nil {
+	// Save baseline failures
+	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, plugin)
+	if err := writeFileTestList(filename, resultsBaseline.FailedList); err != nil {
 		return err
 	}
 
-	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Baseline.Openshift.GetResultOCPValidated().FailedList); err != nil {
+	// Save the openshift-tests suite use by this plugin:
+	filename = fmt.Sprintf("%s/%s_%s_suite_full.txt", path, prefix, plugin)
+	if err := writeFileTestList(filename, suite.Tests); err != nil {
 		return err
 	}
 
-	// Extract errors to sub-directory and create sheet with index
-	// TODO change to ODS
+	return nil
+}
+
+func (cs *ConsolidatedSummary) extractFailuresDetailsByPlugin(path, plugin string) error {
+
+	var resultsProvider *OPCTPluginSummary
+	var resultsBaseline *OPCTPluginSummary
+	ignoreExistingDir := true
+
+	switch plugin {
+	case "kubernetes-conformance":
+		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
+		resultsBaseline = cs.Baseline.Openshift.GetResultK8SValidated()
+	case "openshift-validated":
+		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
+		resultsBaseline = cs.Baseline.Openshift.GetResultOCPValidated()
+	}
+
+	currentDirectory := "failures-provider-filtered"
+	subdir := fmt.Sprintf("%s/%s", path, currentDirectory)
+	if err := createDir(subdir, ignoreExistingDir); err != nil {
+		return err
+	}
+
+	subPrefix := fmt.Sprintf("%s/%s", subdir, plugin)
+	errItems := resultsProvider.FailedItems
+	errList := resultsProvider.FailedFilterBaseline
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	currentDirectory = "failures-provider"
+	subdir = fmt.Sprintf("%s/%s", path, currentDirectory)
+	if err := createDir(subdir, ignoreExistingDir); err != nil {
+		return err
+	}
+
+	subPrefix = fmt.Sprintf("%s/%s", subdir, plugin)
+	errItems = resultsProvider.FailedItems
+	errList = resultsProvider.FailedList
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	currentDirectory = "failures-baseline"
+	subdir = fmt.Sprintf("%s/%s", path, currentDirectory)
+	if err := createDir(subdir, ignoreExistingDir); err != nil {
+		return err
+	}
+
+	subPrefix = fmt.Sprintf("%s/%s", subdir, plugin)
+	errItems = resultsBaseline.FailedItems
+	errList = resultsBaseline.FailedList
+	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
+
+	var rowN int64
+	var suite string
+	var errList []string
+
 	sheet := excelize.NewFile()
 	sheetFile := fmt.Sprintf("%s/failures-index.xlsx", path)
 	defer saveSheet(sheet, sheetFile)
 
-	// sub-dir failures-provider-filtered, extract:
-	// - stdout
-	// - detailed
-	currentDirectory := "failures-provider-filtered"
-	subdir := fmt.Sprintf("%s/%s", path, currentDirectory)
-	if err := createDir(subdir); err != nil {
-		return err
-	}
-	sheet.SetActiveSheet(sheet.NewSheet(currentDirectory))
-	if err := createSheet(sheet, currentDirectory); err != nil {
+	sheetName := "failures-provider-filtered"
+	sheet.SetActiveSheet(sheet.NewSheet(sheetName))
+	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
+	} else {
+		suite = "kubernetes-conformance"
+		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline
+		rowN = 2
+		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+			log.Error(err)
+		}
+		suite = "openshift-validated"
+		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline
+		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+			log.Error(err)
+		}
 	}
 
-	suite = "kubernetes-conformance"
-	subPrefix := fmt.Sprintf("%s/%s", subdir, suite)
-	errItems := cs.Provider.Openshift.GetResultK8SValidated().FailedItems
-	errList := cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline
-	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
-		return err
-	}
-	var rowN int64 = 2
-	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+	sheetName = "failures-provider"
+	sheet.SetActiveSheet(sheet.NewSheet(sheetName))
+	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
+	} else {
+		suite = "kubernetes-conformance"
+		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedList
+		rowN = 2
+		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+			log.Error(err)
+		}
+		suite = "openshift-validated"
+		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedList
+		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+			log.Error(err)
+		}
 	}
 
-	suite = "openshift-validated"
-	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.Provider.Openshift.GetResultOCPValidated().FailedItems
-	errList = cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline
-	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
-		return err
-	}
-	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
+	sheetName = "failures-baseline"
+	sheet.SetActiveSheet(sheet.NewSheet(sheetName))
+	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
+	} else {
+		suite = "kubernetes-conformance"
+		errList = cs.Baseline.Openshift.GetResultK8SValidated().FailedList
+		rowN = 2
+		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+			log.Error(err)
+		}
+		suite = "openshift-validated"
+		errList = cs.Baseline.Openshift.GetResultOCPValidated().FailedList
+		if err := populateSheet(sheet, sheetName, suite, errList, &rowN); err != nil {
+			log.Error(err)
+		}
+	}
+	return nil
+}
+
+// SaveResults dump all the results and processed to the disk to be used
+// on the review process.
+func (cs *ConsolidatedSummary) SaveResults(path string) error {
+
+	if err := createDir(path, false); err != nil {
+		return err
 	}
 
-	// Provider Failures Details (Errors and Stdout)
-	currentDirectory = "failures-provider"
-	subdir = fmt.Sprintf("%s/%s", path, currentDirectory)
-	if err := createDir(subdir); err != nil {
+	// Save the list of failures into individual files by Plugin
+	if err := cs.saveResultsPlugin(path, "kubernetes-conformance"); err != nil {
 		return err
 	}
-	sheet.SetActiveSheet(sheet.NewSheet(currentDirectory))
-	if err := createSheet(sheet, currentDirectory); err != nil {
-		log.Error(err)
+	if err := cs.saveResultsPlugin(path, "openshift-validated"); err != nil {
+		return err
 	}
 
-	suite = "kubernetes-conformance"
-	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.Provider.Openshift.GetResultK8SValidated().FailedItems
-	errList = cs.Provider.Openshift.GetResultK8SValidated().FailedList
-	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+	// Extract errors details to sub directories
+	if err := cs.extractFailuresDetailsByPlugin(path, "kubernetes-conformance"); err != nil {
 		return err
 	}
-	rowN = 2
-	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
-		log.Error(err)
+	if err := cs.extractFailuresDetailsByPlugin(path, "openshift-validated"); err != nil {
+		return err
 	}
 
-	suite = "openshift-validated"
-	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.Provider.Openshift.GetResultOCPValidated().FailedItems
-	errList = cs.Provider.Openshift.GetResultOCPValidated().FailedList
-	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
-		return err
-	}
-	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
-		log.Error(err)
-	}
-
-	// sub-dir failures-baseline, extract:
-	// - stdout
-	// - detailed
-	currentDirectory = "failures-baseline"
-	subdir = fmt.Sprintf("%s/%s", path, currentDirectory)
-	if err := createDir(subdir); err != nil {
-		return err
-	}
-	sheet.SetActiveSheet(sheet.NewSheet(currentDirectory))
-	if err := createSheet(sheet, currentDirectory); err != nil {
-		log.Error(err)
-	}
-
-	suite = "kubernetes-conformance"
-	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.Baseline.Openshift.GetResultK8SValidated().FailedItems
-	errList = cs.Baseline.Openshift.GetResultK8SValidated().FailedList
-	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
-		return err
-	}
-	rowN = 2
-	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
-		log.Error(err)
-	}
-
-	suite = "openshift-validated"
-	subPrefix = fmt.Sprintf("%s/%s", subdir, suite)
-	errItems = cs.Baseline.Openshift.GetResultOCPValidated().FailedItems
-	errList = cs.Baseline.Openshift.GetResultOCPValidated().FailedList
-	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
-		return err
-	}
-	if err := populateGsheet(sheet, currentDirectory, suite, errList, &rowN); err != nil {
-		log.Error(err)
-	}
-
-	// for each suite: save test list
-	suite = "kubernetes-conformance"
-	filename = fmt.Sprintf("%s/%s_%s_suite_full.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Suites.KubernetesConformance.Tests); err != nil {
-		return err
-	}
-	suite = "openshift-validated"
-	filename = fmt.Sprintf("%s/%s_%s_suite_full.txt", path, prefix, suite)
-	if err := writeFileTestList(filename, cs.Suites.KubernetesConformance.Tests); err != nil {
+	// Save one Sheet file with Failures to be used on the review process
+	if err := cs.saveFailuresIndexToSheet(path); err != nil {
 		return err
 	}
 
@@ -475,7 +483,6 @@ func writeFileTestList(filename string, data []string) error {
 // extractTestErrors dumps the test error, summary and stdout, to be saved
 // to individual files.
 func extractTestErrors(prefix string, items map[string]*PluginFailedItem, failures []string) error {
-
 	for idx, line := range failures {
 		if _, ok := items[line]; ok {
 			file := fmt.Sprintf("%s_%d-failure.txt", prefix, idx+1)
@@ -491,7 +498,6 @@ func extractTestErrors(prefix string, items map[string]*PluginFailedItem, failur
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -516,8 +522,11 @@ func writeErrorToFile(file, data string) error {
 }
 
 // createDir checks if the directory exists, if not creates it, otherwise log and return error
-func createDir(path string) error {
+func createDir(path string, ignoreexisting bool) error {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		if ignoreexisting == true {
+			return nil
+		}
 		log.Errorf("ERROR: Directory already exists [%s]: %v", path, err)
 		return err
 	}
@@ -544,16 +553,16 @@ func createSheet(sheet *excelize.File, sheeName string) error {
 }
 
 // populateGsheet fill each row per error item.
-func populateGsheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) error {
+func populateSheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) error {
 
-	for k, v := range list {
+	for idx, v := range list {
 		sheet.SetCellValue(sheeName, fmt.Sprintf("A%d", *rowN), suite)
-		sheet.SetCellValue(sheeName, fmt.Sprintf("B%d", *rowN), k+1)
+		sheet.SetCellValue(sheeName, fmt.Sprintf("B%d", *rowN), idx+1)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("C%d", *rowN), sheeName)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("D%d", *rowN), v)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("E%d", *rowN), "TODO Review")
 		sheet.SetCellValue(sheeName, fmt.Sprintf("F%d", *rowN), "")
-		*rowN += 1
+		*(rowN) += 1
 	}
 
 	return nil
