@@ -128,21 +128,24 @@ func (cs *ConsolidatedSummary) applyFilterBaseline() error {
 // applyFilterBaselineForPlugin calculates the **exclusion** tests of
 // Provider Failed included on suite and Baseline failed tests.
 func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error {
-	var e2eFailuresProvider []string
-	var e2eFailuresBaseline []string
-	var e2eFailuresFiltered []string
-	hashBaseline := make(map[string]struct{})
+
+	var providerSummary *OPCTPluginSummary
+	var baselineSummary *OPCTPluginSummary
 
 	switch plugin {
 	case CertPluginNameKubernetesConformance:
-		e2eFailuresProvider = cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterSuite
-		e2eFailuresBaseline = cs.Baseline.Openshift.PluginResultK8sConformance.FailedList
+		providerSummary = cs.Provider.Openshift.GetResultK8SValidated()
+		baselineSummary = cs.Baseline.Openshift.GetResultK8SValidated()
 	case CertPluginNameOpenshiftValidated:
-		e2eFailuresProvider = cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterSuite
-		e2eFailuresBaseline = cs.Baseline.Openshift.PluginResultOCPValidated.FailedList
+		providerSummary = cs.Provider.Openshift.GetResultOCPValidated()
+		baselineSummary = cs.Baseline.Openshift.GetResultOCPValidated()
 	default:
-		return errors.New("Unable to get current failures: Suite not found to apply filter: Baseline")
+		return errors.New("Suite not found to apply filter: Flaky")
 	}
+
+	e2eFailuresProvider := providerSummary.FailedFilterSuite
+	e2eFailuresBaseline := baselineSummary.FailedList
+	hashBaseline := make(map[string]struct{}, len(e2eFailuresBaseline))
 
 	for _, v := range e2eFailuresBaseline {
 		hashBaseline[v] = struct{}{}
@@ -150,20 +153,10 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 
 	for _, v := range e2eFailuresProvider {
 		if _, ok := hashBaseline[v]; !ok {
-			e2eFailuresFiltered = append(e2eFailuresFiltered, v)
+			providerSummary.FailedFilterBaseline = append(providerSummary.FailedFilterBaseline, v)
 		}
 	}
-	sort.Strings(e2eFailuresFiltered)
-
-	switch plugin {
-	case CertPluginNameKubernetesConformance:
-		cs.Provider.Openshift.PluginResultK8sConformance.FailedFilterBaseline = e2eFailuresFiltered
-	case CertPluginNameOpenshiftValidated:
-		cs.Provider.Openshift.PluginResultOCPValidated.FailedFilterBaseline = e2eFailuresFiltered
-	default:
-		return errors.New("Unable to save filetered failures: Suite not found to apply filter: Baseline")
-	}
-
+	sort.Strings(providerSummary.FailedFilterBaseline)
 	return nil
 }
 
@@ -191,9 +184,9 @@ func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
 
 	switch plugin {
 	case CertPluginNameKubernetesConformance:
-		ps = cs.Provider.Openshift.PluginResultK8sConformance
+		ps = cs.Provider.Openshift.GetResultK8SValidated()
 	case CertPluginNameOpenshiftValidated:
-		ps = cs.Provider.Openshift.PluginResultOCPValidated
+		ps = cs.Provider.Openshift.GetResultOCPValidated()
 	default:
 		return errors.New("Suite not found to apply filter: Flaky")
 	}
@@ -366,14 +359,10 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	} else {
 		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline
 		rowN = 2
-		if err := populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN); err != nil {
-			log.Error(err)
-		}
+		populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN)
 
 		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline
-		if err := populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN); err != nil {
-			log.Error(err)
-		}
+		populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN)
 	}
 
 	sheetName = "failures-provider"
@@ -383,14 +372,10 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	} else {
 		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedList
 		rowN = 2
-		if err := populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN); err != nil {
-			log.Error(err)
-		}
+		populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN)
 
 		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedList
-		if err := populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN); err != nil {
-			log.Error(err)
-		}
+		populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN)
 	}
 
 	sheetName = "failures-baseline"
@@ -400,14 +385,10 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	} else {
 		errList = cs.Baseline.Openshift.GetResultK8SValidated().FailedList
 		rowN = 2
-		if err := populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN); err != nil {
-			log.Error(err)
-		}
+		populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN)
 
 		errList = cs.Baseline.Openshift.GetResultOCPValidated().FailedList
-		if err := populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN); err != nil {
-			log.Error(err)
-		}
+		populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN)
 	}
 	return nil
 }
@@ -448,11 +429,10 @@ func (cs *ConsolidatedSummary) SaveResults(path string) error {
 // writeFileTestList saves the list of test names to a new text file
 func writeFileTestList(filename string, data []string) error {
 	fd, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer fd.Close()
-
 	if err != nil {
 		log.Fatalf("failed creating file: %s", err)
 	}
+	defer fd.Close()
 
 	writer := bufio.NewWriter(fd)
 	defer writer.Flush()
@@ -491,11 +471,10 @@ func extractTestErrors(prefix string, items map[string]*PluginFailedItem, failur
 // writeErrorToFile save the entire buffer to individual file.
 func writeErrorToFile(file, data string) error {
 	fd, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer fd.Close()
-
 	if err != nil {
 		log.Fatalf("failed creating file: %s", err)
 	}
+	defer fd.Close()
 
 	writer := bufio.NewWriter(fd)
 	defer writer.Flush()
@@ -511,7 +490,7 @@ func writeErrorToFile(file, data string) error {
 // createDir checks if the directory exists, if not creates it, otherwise log and return error
 func createDir(path string, ignoreexisting bool) error {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		if ignoreexisting == true {
+		if ignoreexisting {
 			return nil
 		}
 		log.Errorf("ERROR: Directory already exists [%s]: %v", path, err)
@@ -540,7 +519,7 @@ func createSheet(sheet *excelize.File, sheeName string) error {
 }
 
 // populateGsheet fill each row per error item.
-func populateSheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) error {
+func populateSheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) {
 
 	for idx, v := range list {
 		sheet.SetCellValue(sheeName, fmt.Sprintf("A%d", *rowN), suite)
@@ -552,7 +531,7 @@ func populateSheet(sheet *excelize.File, sheeName, suite string, list []string, 
 		*(rowN) += 1
 	}
 
-	return nil
+	return
 }
 
 // save the excel sheet to the disk.

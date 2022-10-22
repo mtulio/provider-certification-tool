@@ -22,7 +22,7 @@ type OpenShiftSummary struct {
 
 type SummaryClusterVersionOutput struct {
 	DesiredVersion     string
-	Progressing        *configv1.ConditionStatus
+	Progressing        string
 	ProgressingMessage string
 }
 
@@ -62,7 +62,7 @@ func (os *OpenShiftSummary) GetClusterVersion() (*SummaryClusterVersionOutput, e
 	}
 	for _, condition := range os.ClusterVersion.Status.Conditions {
 		if condition.Type == configv1.OperatorProgressing {
-			resp.Progressing = &condition.Status
+			resp.Progressing = string(condition.Status)
 			resp.ProgressingMessage = condition.Message
 		}
 	}
@@ -105,7 +105,7 @@ func (os *OpenShiftSummary) SetPluginResult(in *OPCTPluginSummary) error {
 	case CertPluginNameOpenshiftValidated:
 		os.PluginResultOCPValidated = in
 	default:
-		return fmt.Errorf("Unable to Set Plugin results: Plugin not found: %s", in.Name)
+		return fmt.Errorf("unable to Set Plugin results: Plugin not found: %s", in.Name)
 	}
 	return nil
 }
