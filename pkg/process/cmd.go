@@ -7,9 +7,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"text/tabwriter"
+
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/internal/pkg/summary"
 	"github.com/vmware-tanzu/sonobuoy/pkg/errlog"
-	"text/tabwriter"
 )
 
 type Input struct {
@@ -116,27 +117,33 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
 
 	pOCP := cs.Provider.Openshift
-	pCL := cs.Provider.Cluster
-
 	bOCP := cs.Baseline.Openshift
+
+	pOCPCV, _ := pOCP.GetClusterVersion()
+	bOCPCV, _ := bOCP.GetClusterVersion()
+
+	pOCPInfra, _ := pOCP.GetInfrastructure()
+	bOCPInfra, _ := bOCP.GetInfrastructure()
+
+	pCL := cs.Provider.Cluster
 	bCL := cs.Baseline.Cluster
 
 	newLineWithTab := "\t\t\n"
 	tbWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
 
 	fmt.Fprintf(tbWriter, " Kubernetes API Server version\t: %s\t: %s\n", pCL.APIVersion, bCL.APIVersion)
-	fmt.Fprintf(tbWriter, " OpenShift Container Platform version\t: %s\t: %s\n", pOCP.CvoStatusDesiredVersion, bOCP.CvoStatusDesiredVersion)
-	fmt.Fprintf(tbWriter, " - Cluster Update Progressing\t: %s\t: %s\n", pOCP.CvoCondProgressing, bOCP.CvoCondProgressing)
-	fmt.Fprintf(tbWriter, " - Cluster Target Version\t: %s\t: %s\n", pOCP.CvoCondProgressingMessage, bOCP.CvoCondProgressingMessage)
+	fmt.Fprintf(tbWriter, " OpenShift Container Platform version\t: %s\t: %s\n", pOCPCV.DesiredVersion, bOCPCV.DesiredVersion)
+	fmt.Fprintf(tbWriter, " - Cluster Update Progressing\t: %s\t: %s\n", pOCPCV.Progressing, bOCPCV.Progressing)
+	fmt.Fprintf(tbWriter, " - Cluster Target Version\t: %s\t: %s\n", pOCPCV.ProgressingMessage, bOCPCV.ProgressingMessage)
 
 	fmt.Fprintf(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " OCP Infrastructure:\t\t\n")
-	fmt.Fprintf(tbWriter, " - PlatformType\t: %s\t: %s\n", pOCP.InfraPlatformType, bOCP.InfraPlatformType)
-	fmt.Fprintf(tbWriter, " - Name\t: %s\t: %s\n", pOCP.InfraName, bOCP.InfraName)
-	fmt.Fprintf(tbWriter, " - Topology\t: %s\t: %s\n", pOCP.InfraTopology, bOCP.InfraTopology)
-	fmt.Fprintf(tbWriter, " - ControlPlaneTopology\t: %s\t: %s\n", pOCP.InfraControlPlaneTopology, bOCP.InfraControlPlaneTopology)
-	fmt.Fprintf(tbWriter, " - API Server URL\t: %s\t: %s\n", pOCP.InfraAPIServerURL, bOCP.InfraAPIServerURL)
-	fmt.Fprintf(tbWriter, " - API Server URL (internal)\t: %s\t: %s\n", pOCP.InfraAPIServerURLInternal, bOCP.InfraAPIServerURLInternal)
+	fmt.Fprintf(tbWriter, " - PlatformType\t: %s\t: %s\n", pOCPInfra.Status.PlatformStatus.Type, bOCPInfra.Status.PlatformStatus.Type)
+	fmt.Fprintf(tbWriter, " - Name\t: %s\t: %s\n", pOCPInfra.Status.InfrastructureName, bOCPInfra.Status.InfrastructureName)
+	fmt.Fprintf(tbWriter, " - Topology\t: %s\t: %s\n", pOCPInfra.Status.InfrastructureTopology, bOCPInfra.Status.InfrastructureTopology)
+	fmt.Fprintf(tbWriter, " - ControlPlaneTopology\t: %s\t: %s\n", pOCPInfra.Status.ControlPlaneTopology, bOCPInfra.Status.ControlPlaneTopology)
+	fmt.Fprintf(tbWriter, " - API Server URL\t: %s\t: %s\n", pOCPInfra.Status.APIServerURL, bOCPInfra.Status.APIServerURL)
+	fmt.Fprintf(tbWriter, " - API Server URL (internal)\t: %s\t: %s\n", pOCPInfra.Status.APIServerInternalURL, bOCPInfra.Status.APIServerInternalURL)
 
 	fmt.Fprintf(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " Plugins summary by name:\t  Status [Total/Passed/Failed/Skipped] (timeout)\n")
@@ -157,9 +164,11 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 
 	fmt.Fprintf(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " Health summary:\t  [A=True/P=True/D=True]\t\n")
+	pOCPCO, _ := pOCP.GetClusterOperator()
+	bOCPCO, _ := bOCP.GetClusterOperator()
 	fmt.Fprintf(tbWriter, " - Cluster Operators\t: [%d/%d/%d]\t: [%d/%d/%d]\n",
-		pOCP.CoCountAvailable, pOCP.CoCountProgressing, pOCP.CoCountDegraded,
-		bOCP.CoCountAvailable, bOCP.CoCountProgressing, bOCP.CoCountDegraded,
+		pOCPCO.CountAvailable, pOCPCO.CountProgressing, pOCPCO.CountDegraded,
+		bOCPCO.CountAvailable, bOCPCO.CountProgressing, bOCPCO.CountDegraded,
 	)
 
 	pNhMessage := fmt.Sprintf("%d/%d %s", pCL.NodeHealth.Total, pCL.NodeHealth.Total, "")
