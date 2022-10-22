@@ -7,15 +7,16 @@ import (
 
 	"github.com/pkg/errors"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/vmware-tanzu/sonobuoy/pkg/client/results"
 	"github.com/vmware-tanzu/sonobuoy/pkg/discovery"
 )
 
 const (
-	// OpenShift Custom Resources
-	openshiftCrInfrastructureFilePath = "resources/cluster/config.openshift.io_v1_infrastructures.json"
-	openshiftCrCvoPath                = "resources/cluster/config.openshift.io_v1_clusterversions.json"
-	openshiftCrCoPath                 = "resources/cluster/config.openshift.io_v1_clusteroperators.json"
+	// OpenShift Custom Resources locations on archive file
+	resourceInfrastructuresPath  = "resources/cluster/config.openshift.io_v1_infrastructures.json"
+	resourceClusterVersionsPath  = "resources/cluster/config.openshift.io_v1_clusterversions.json"
+	resourceClusterOperatorsPath = "resources/cluster/config.openshift.io_v1_clusteroperators.json"
 )
 
 // ResultSummary holds the summary of a single execution
@@ -29,7 +30,7 @@ type ResultSummary struct {
 
 // Populate eentry point to process the results into the summary structure.
 func (rs *ResultSummary) Populate() error {
-	// TODO: review the fd usage for tarbal and file
+
 	cleanup, err := rs.openReader()
 	defer cleanup()
 	if err != nil {
@@ -187,9 +188,9 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 // information to the ResultSummary.
 func (rs *ResultSummary) populateSummary() error {
 
-	ocpInfra := OpenShiftCrInfrastructures{}
-	ocpCVO := OpenShiftCrCvo{}
-	ocpCO := OpenShiftCrCo{}
+	ocpInfra := configv1.InfrastructureList{}
+	ocpCV := configv1.ClusterVersionList{}
+	ocpCO := configv1.ClusterOperatorList{}
 
 	// For summary and dump views, get the item as an object to iterate over.
 	err := rs.reader.WalkFiles(func(path string, info os.FileInfo, err error) error {
@@ -197,15 +198,15 @@ func (rs *ResultSummary) populateSummary() error {
 		if err != nil {
 			return err
 		}
-		err = results.ExtractFileIntoStruct(openshiftCrInfrastructureFilePath, path, info, &ocpInfra)
+		err = results.ExtractFileIntoStruct(resourceInfrastructuresPath, path, info, &ocpInfra)
 		if err != nil {
 			return err
 		}
-		err = results.ExtractFileIntoStruct(openshiftCrCvoPath, path, info, &ocpCVO)
+		err = results.ExtractFileIntoStruct(resourceClusterVersionsPath, path, info, &ocpCV)
 		if err != nil {
 			return err
 		}
-		err = results.ExtractFileIntoStruct(openshiftCrCoPath, path, info, &ocpCO)
+		err = results.ExtractFileIntoStruct(resourceClusterOperatorsPath, path, info, &ocpCO)
 		if err != nil {
 			return err
 		}
@@ -215,13 +216,13 @@ func (rs *ResultSummary) populateSummary() error {
 		return err
 	}
 
-	if err := rs.Openshift.SetFromInfraCR(&ocpInfra); err != nil {
+	if err := rs.Openshift.SetInfrastructure(&ocpInfra); err != nil {
 		return err
 	}
-	if err := rs.Openshift.SetFromCvoCR(&ocpCVO); err != nil {
+	if err := rs.Openshift.SetClusterVersion(&ocpCV); err != nil {
 		return err
 	}
-	if err := rs.Openshift.SetFromCoCR(&ocpCO); err != nil {
+	if err := rs.Openshift.SetClusterOperator(&ocpCO); err != nil {
 		return err
 	}
 
