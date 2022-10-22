@@ -21,6 +21,8 @@ type ConsolidatedSummary struct {
 	Suites   *OpenshiftTestsSuites
 }
 
+// Process entrypoint to read and fill all summaries for each archive, plugin and suites
+// applying any transformation it needs through filters.
 func (cs *ConsolidatedSummary) Process() error {
 
 	// Load Result Summary from Archives
@@ -61,6 +63,18 @@ func (cs *ConsolidatedSummary) Process() error {
 	return nil
 }
 
+func (cs *ConsolidatedSummary) GetProvider() *ResultSummary {
+	return cs.Provider
+}
+
+func (cs *ConsolidatedSummary) GetBaseline() *ResultSummary {
+	return cs.Baseline
+}
+
+func (cs *ConsolidatedSummary) GetSuites() *OpenshiftTestsSuites {
+	return cs.Suites
+}
+
 // applyFilterSuite process the FailedList for each plugin, getting **intersection** tests
 // for respective suite.
 func (cs *ConsolidatedSummary) applyFilterSuite() error {
@@ -85,11 +99,11 @@ func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
 
 	switch plugin {
 	case CertPluginNameKubernetesConformance:
-		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
+		resultsProvider = cs.GetProvider().GetOpenShift().GetResultK8SValidated()
 		pluginSuite = cs.Suites.KubernetesConformance
 	case CertPluginNameOpenshiftValidated:
-		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
-		pluginSuite = cs.Suites.OpenshiftConformance
+		resultsProvider = cs.GetProvider().GetOpenShift().GetResultOCPValidated()
+		pluginSuite = cs.GetSuites().OpenshiftConformance
 	}
 
 	e2eFailures := resultsProvider.FailedList
@@ -134,11 +148,11 @@ func (cs *ConsolidatedSummary) applyFilterBaselineForPlugin(plugin string) error
 
 	switch plugin {
 	case CertPluginNameKubernetesConformance:
-		providerSummary = cs.Provider.Openshift.GetResultK8SValidated()
-		baselineSummary = cs.Baseline.Openshift.GetResultK8SValidated()
+		providerSummary = cs.GetProvider().GetOpenShift().GetResultK8SValidated()
+		baselineSummary = cs.GetBaseline().GetOpenShift().GetResultK8SValidated()
 	case CertPluginNameOpenshiftValidated:
-		providerSummary = cs.Provider.Openshift.GetResultOCPValidated()
-		baselineSummary = cs.Baseline.Openshift.GetResultOCPValidated()
+		providerSummary = cs.GetProvider().GetOpenShift().GetResultOCPValidated()
+		baselineSummary = cs.GetBaseline().GetOpenShift().GetResultOCPValidated()
 	default:
 		return errors.New("Suite not found to apply filter: Flaky")
 	}
@@ -184,9 +198,9 @@ func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
 
 	switch plugin {
 	case CertPluginNameKubernetesConformance:
-		ps = cs.Provider.Openshift.GetResultK8SValidated()
+		ps = cs.GetProvider().GetOpenShift().GetResultK8SValidated()
 	case CertPluginNameOpenshiftValidated:
-		ps = cs.Provider.Openshift.GetResultOCPValidated()
+		ps = cs.GetProvider().GetOpenShift().GetResultOCPValidated()
 	default:
 		return errors.New("Suite not found to apply filter: Flaky")
 	}
@@ -232,12 +246,12 @@ func (cs *ConsolidatedSummary) saveResultsPlugin(path, plugin string) error {
 
 	switch plugin {
 	case CertPluginNameKubernetesConformance:
-		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
-		resultsBaseline = cs.Baseline.Openshift.GetResultK8SValidated()
+		resultsProvider = cs.GetProvider().GetOpenShift().GetResultK8SValidated()
+		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultK8SValidated()
 		suite = cs.Suites.KubernetesConformance
 	case CertPluginNameOpenshiftValidated:
-		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
-		resultsBaseline = cs.Baseline.Openshift.GetResultOCPValidated()
+		resultsProvider = cs.GetProvider().GetOpenShift().GetResultOCPValidated()
+		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultOCPValidated()
 		suite = cs.Suites.OpenshiftConformance
 	}
 
@@ -294,11 +308,11 @@ func (cs *ConsolidatedSummary) extractFailuresDetailsByPlugin(path, plugin strin
 
 	switch plugin {
 	case CertPluginNameKubernetesConformance:
-		resultsProvider = cs.Provider.Openshift.GetResultK8SValidated()
-		resultsBaseline = cs.Baseline.Openshift.GetResultK8SValidated()
+		resultsProvider = cs.GetProvider().GetOpenShift().GetResultK8SValidated()
+		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultK8SValidated()
 	case CertPluginNameOpenshiftValidated:
-		resultsProvider = cs.Provider.Openshift.GetResultOCPValidated()
-		resultsBaseline = cs.Baseline.Openshift.GetResultOCPValidated()
+		resultsProvider = cs.GetProvider().GetOpenShift().GetResultOCPValidated()
+		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultOCPValidated()
 	}
 
 	currentDirectory := "failures-provider-filtered"
@@ -357,11 +371,11 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
 	} else {
-		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedFilterBaseline
+		errList = cs.GetProvider().GetOpenShift().GetResultK8SValidated().FailedFilterBaseline
 		rowN = 2
 		populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN)
 
-		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedFilterBaseline
+		errList = cs.GetProvider().GetOpenShift().GetResultOCPValidated().FailedFilterBaseline
 		populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN)
 	}
 
@@ -370,11 +384,11 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
 	} else {
-		errList = cs.Provider.Openshift.GetResultK8SValidated().FailedList
+		errList = cs.GetProvider().GetOpenShift().GetResultK8SValidated().FailedList
 		rowN = 2
 		populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN)
 
-		errList = cs.Provider.Openshift.GetResultOCPValidated().FailedList
+		errList = cs.GetProvider().GetOpenShift().GetResultOCPValidated().FailedList
 		populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN)
 	}
 
@@ -383,11 +397,11 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 	if err := createSheet(sheet, sheetName); err != nil {
 		log.Error(err)
 	} else {
-		errList = cs.Baseline.Openshift.GetResultK8SValidated().FailedList
+		errList = cs.GetBaseline().GetOpenShift().GetResultK8SValidated().FailedList
 		rowN = 2
 		populateSheet(sheet, sheetName, CertPluginNameKubernetesConformance, errList, &rowN)
 
-		errList = cs.Baseline.Openshift.GetResultOCPValidated().FailedList
+		errList = cs.GetBaseline().GetOpenShift().GetResultOCPValidated().FailedList
 		populateSheet(sheet, sheetName, CertPluginNameOpenshiftValidated, errList, &rowN)
 	}
 	return nil
@@ -520,7 +534,6 @@ func createSheet(sheet *excelize.File, sheeName string) error {
 
 // populateGsheet fill each row per error item.
 func populateSheet(sheet *excelize.File, sheeName, suite string, list []string, rowN *int64) {
-
 	for idx, v := range list {
 		sheet.SetCellValue(sheeName, fmt.Sprintf("A%d", *rowN), suite)
 		sheet.SetCellValue(sheeName, fmt.Sprintf("B%d", *rowN), idx+1)
@@ -530,8 +543,6 @@ func populateSheet(sheet *excelize.File, sheeName, suite string, list []string, 
 		sheet.SetCellValue(sheeName, fmt.Sprintf("F%d", *rowN), "")
 		*(rowN) += 1
 	}
-
-	return
 }
 
 // save the excel sheet to the disk.
