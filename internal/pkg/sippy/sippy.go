@@ -2,7 +2,6 @@ package sippy
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -90,12 +89,12 @@ func (a *SippyAPI) QueryTests(r *SippyTestsRequestInput) (*SippyTestsRequestOutp
 
 	b, err := json.Marshal(filter)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't parse response body. %+v", err))
+		return nil, fmt.Errorf("couldn't parse response body. %+v", err)
 	}
 
 	baseUrl, err := url.Parse(apiBaseURL + apiPathTests)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Malformed URL: ", err.Error()))
+		return nil, fmt.Errorf("malformed URL: %+v", err)
 	}
 
 	params := url.Values{}
@@ -106,23 +105,25 @@ func (a *SippyAPI) QueryTests(r *SippyTestsRequestInput) (*SippyTestsRequestOutp
 
 	req, err := http.NewRequest(http.MethodGet, baseUrl.String(), nil)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't create the request: %+v", err))
+		return nil, fmt.Errorf("couldn't create the request: %+v", err)
 	}
 
 	res, err := a.client.Do(req)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't call URL %s: %+v", baseUrl.String(), err))
+		return nil, fmt.Errorf("couldn't call URL %s: %+v", baseUrl.String(), err)
+
 	}
 	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't parse response body. %+v", err))
+		return nil, fmt.Errorf("couldn't parse response body. %+v", err)
+
 	}
 
 	sippyResponse := SippyTestsRequestOutput{}
 	if err := json.Unmarshal([]byte(body), &sippyResponse); err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't unmarshal response body: %+v \nBody: %s", string(body), err))
+		return nil, fmt.Errorf("couldn't unmarshal response body: %+v \nBody: %s", string(body), err)
 	}
 	return &sippyResponse, nil
 }

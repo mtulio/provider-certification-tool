@@ -23,8 +23,8 @@ const (
 type ResultSummary struct {
 	Name      string
 	Archive   string
-	Cluster   discovery.ClusterSummary
-	Openshift *OpenShiftSummary
+	Sonobuoy  *SonobuoySummary
+	OpenShift *OpenShiftSummary
 	reader    *results.Reader
 }
 
@@ -67,6 +67,18 @@ func (rs *ResultSummary) Populate() error {
 	}
 
 	return lastErr
+}
+
+func (rs *ResultSummary) GetOpenShift() *OpenShiftSummary {
+	return rs.OpenShift
+}
+
+func (rs *ResultSummary) GetSonobuoy() *SonobuoySummary {
+	return rs.Sonobuoy
+}
+
+func (rs *ResultSummary) GetSonobuoyCluster() *discovery.ClusterSummary {
+	return rs.Sonobuoy.Cluster
 }
 
 // getPluginList extract the plugin list from the archive reader.
@@ -162,7 +174,7 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 		failedList = append(failedList, item.Name)
 	}
 
-	if err := rs.Openshift.SetPluginResult(&OPCTPluginSummary{
+	if err := rs.GetOpenShift().SetPluginResult(&OPCTPluginSummary{
 		Name:        obj.Name,
 		Status:      obj.Status,
 		Total:       int64(total),
@@ -188,13 +200,15 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 // information to the ResultSummary.
 func (rs *ResultSummary) populateSummary() error {
 
+	sbCluster := discovery.ClusterSummary{}
 	ocpInfra := configv1.InfrastructureList{}
 	ocpCV := configv1.ClusterVersionList{}
 	ocpCO := configv1.ClusterOperatorList{}
 
 	// For summary and dump views, get the item as an object to iterate over.
 	err := rs.reader.WalkFiles(func(path string, info os.FileInfo, err error) error {
-		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &rs.Cluster)
+
+		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &sbCluster)
 		if err != nil {
 			return err
 		}
@@ -216,13 +230,16 @@ func (rs *ResultSummary) populateSummary() error {
 		return err
 	}
 
-	if err := rs.Openshift.SetInfrastructure(&ocpInfra); err != nil {
+	if err := rs.GetSonobuoy().SetCluster(&sbCluster); err != nil {
 		return err
 	}
-	if err := rs.Openshift.SetClusterVersion(&ocpCV); err != nil {
+	if err := rs.GetOpenShift().SetInfrastructure(&ocpInfra); err != nil {
 		return err
 	}
-	if err := rs.Openshift.SetClusterOperator(&ocpCO); err != nil {
+	if err := rs.GetOpenShift().SetClusterVersion(&ocpCV); err != nil {
+		return err
+	}
+	if err := rs.GetOpenShift().SetClusterOperator(&ocpCO); err != nil {
 		return err
 	}
 

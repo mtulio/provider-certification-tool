@@ -64,12 +64,14 @@ func processResult(input *Input) error {
 		Provider: &summary.ResultSummary{
 			Name:      "provider",
 			Archive:   input.archive,
-			Openshift: summary.NewOpenShiftSummary(),
+			OpenShift: &summary.OpenShiftSummary{},
+			Sonobuoy:  &summary.SonobuoySummary{},
 		},
 		Baseline: &summary.ResultSummary{
-			Name:      "base",
+			Name:      "baseline",
 			Archive:   input.archiveBase,
-			Openshift: summary.NewOpenShiftSummary(),
+			OpenShift: &summary.OpenShiftSummary{},
+			Sonobuoy:  &summary.SonobuoySummary{},
 		},
 		Suites: &summary.OpenshiftTestsSuites{
 			OpenshiftConformance: &summary.OpenshiftTestsSuite{
@@ -116,8 +118,8 @@ func processResult(input *Input) error {
 func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
 
-	pOCP := cs.Provider.Openshift
-	bOCP := cs.Baseline.Openshift
+	pOCP := cs.GetProvider().GetOpenShift()
+	bOCP := cs.GetBaseline().GetOpenShift()
 
 	pOCPCV, _ := pOCP.GetClusterVersion()
 	bOCPCV, _ := bOCP.GetClusterVersion()
@@ -125,8 +127,9 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	pOCPInfra, _ := pOCP.GetInfrastructure()
 	bOCPInfra, _ := bOCP.GetInfrastructure()
 
-	pCL := cs.Provider.Cluster
-	bCL := cs.Baseline.Cluster
+	// Provider and Baseline Cluster (archive)
+	pCL := cs.GetProvider().GetSonobuoyCluster()
+	bCL := cs.GetBaseline().GetSonobuoyCluster()
 
 	newLineWithTab := "\t\t\n"
 	tbWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
@@ -136,7 +139,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Fprintf(tbWriter, " - Cluster Update Progressing\t: %s\t: %s\n", pOCPCV.Progressing, bOCPCV.Progressing)
 	fmt.Fprintf(tbWriter, " - Cluster Target Version\t: %s\t: %s\n", pOCPCV.ProgressingMessage, bOCPCV.ProgressingMessage)
 
-	fmt.Fprintf(tbWriter, newLineWithTab)
+	fmt.Fprint(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " OCP Infrastructure:\t\t\n")
 	fmt.Fprintf(tbWriter, " - PlatformType\t: %s\t: %s\n", pOCPInfra.Status.PlatformStatus.Type, bOCPInfra.Status.PlatformStatus.Type)
 	fmt.Fprintf(tbWriter, " - Name\t: %s\t: %s\n", pOCPInfra.Status.InfrastructureName, bOCPInfra.Status.InfrastructureName)
@@ -145,7 +148,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Fprintf(tbWriter, " - API Server URL\t: %s\t: %s\n", pOCPInfra.Status.APIServerURL, bOCPInfra.Status.APIServerURL)
 	fmt.Fprintf(tbWriter, " - API Server URL (internal)\t: %s\t: %s\n", pOCPInfra.Status.APIServerInternalURL, bOCPInfra.Status.APIServerInternalURL)
 
-	fmt.Fprintf(tbWriter, newLineWithTab)
+	fmt.Fprint(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " Plugins summary by name:\t  Status [Total/Passed/Failed/Skipped] (timeout)\n")
 
 	plK8S := pOCP.GetResultK8SValidated()
@@ -162,7 +165,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	bOCPPluginRes = fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plOCP.Status, plOCP.Total, plOCP.Passed, plOCP.Failed, plOCP.Skipped, plOCP.Timeout)
 	fmt.Fprintf(tbWriter, " - %s\t: %s\t: %s\n", name, pOCPPluginRes, bOCPPluginRes)
 
-	fmt.Fprintf(tbWriter, newLineWithTab)
+	fmt.Fprint(tbWriter, newLineWithTab)
 	fmt.Fprintf(tbWriter, " Health summary:\t  [A=True/P=True/D=True]\t\n")
 	pOCPCO, _ := pOCP.GetClusterOperator()
 	bOCPCO, _ := bOCP.GetClusterOperator()
@@ -233,8 +236,8 @@ func printProcessedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Printf(" - %s: %d \n", summary.SuiteNameOpenshiftConformance, cs.Suites.GetTotalOCP())
 
 	fmt.Printf("\n Total Tests by Certification Layer:\n")
-	printSummaryPlugin(cs.Provider.Openshift.GetResultK8SValidated())
-	printSummaryPlugin(cs.Provider.Openshift.GetResultOCPValidated())
+	printSummaryPlugin(cs.GetProvider().GetOpenShift().GetResultK8SValidated())
+	printSummaryPlugin(cs.GetProvider().GetOpenShift().GetResultOCPValidated())
 
 	return nil
 }
@@ -270,8 +273,8 @@ func printErrorDetailPlugin(p *summary.OPCTPluginSummary) {
 func printErrorDetails(cs *summary.ConsolidatedSummary) error {
 
 	fmt.Printf("\n Total Tests by Certification Layer: \n")
-	printErrorDetailPlugin(cs.Provider.Openshift.GetResultK8SValidated())
-	printErrorDetailPlugin(cs.Provider.Openshift.GetResultOCPValidated())
+	printErrorDetailPlugin(cs.GetProvider().GetOpenShift().GetResultK8SValidated())
+	printErrorDetailPlugin(cs.GetProvider().GetOpenShift().GetResultOCPValidated())
 
 	return nil
 }
