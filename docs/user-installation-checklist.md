@@ -1,14 +1,28 @@
-# Cluster Installation Checklist
+# OPCT - Cluster Installation Checklist
 
-> WIP: this document is working in progress
+> WIP - this document is working in progress
+
+<!--
+Do not change the following markdown commented lines.
+__version__: 0.1.0-preview
+-->
 
 > Checklist that should be provided on the first submission, when opening the support case.
+
+This checklist should be provided every new support case, or when any items have been changed (Example, Compute flavor).
+
+if you have any questions you can:
+
+- Review the [Installation Review Guide](./user-installation-review.md)
+- Review the [OpenShift Infrastructure Provider Guide](https://docs.providers.openshift.org/)
+- Review the [OpenShift Documentation Page related the version your are certifying](https://docs.openshift.com/container-platform)
+- Ask your Red Hat Partner
 
 ## Provider Information
 
 - Provider Name:                # Example: MyCloud
 - OpenShift Version:            # Example: 4.11.4
-- Certification Type:           # Options: ( Standard | Upgrade )
+- Certification Type:           # Options: (Standard | Upgrade)
 - Environment Setup Topology:   # Options: (Standard | Dedicated)
 
 ## Review Checklist

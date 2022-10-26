@@ -1,34 +1,34 @@
 # OpenShift Provider Certification Tool - Support Guide
 
-> WIP: this document is working in progress
+> WIP - this document is working in progress
 
 - [Support Case Check List](#check-list)
-  - [New Support Cases](#check-list-new-case)
-  - [New Executions](#check-list-new-executions)
+    - [New Support Cases](#check-list-new-case)
+    - [New Executions](#check-list-new-executions)
 - [Setting up the Review Environment](#setup)
-  - [Install tools](#setup-install)
-  - [Download dependencies](#setup-download-dependencies)
-  - [Download Partner Results](#setup-download-results)
+    - [Install tools](#setup-install)
+    - [Download dependencies](#setup-download-dependencies)
+    - [Download Partner Results](#setup-download-results)
 - [Review guide: exploring the failed tests](#review-process)
-  - [Exploring the failures](#review-process-exploring)
-  - [Extracting the failures to local directory](#review-process-extracting)
-  - [Explaning the extracted files](#review-process-explain)
-  - [Review Guidelines](#review-process-guidelines)
+    - [Exploring the failures](#review-process-exploring)
+    - [Extracting the failures to local directory](#review-process-extracting)
+    - [Explaning the extracted files](#review-process-explain)
+    - [Review Guidelines](#review-process-guidelines)
 
 
-## Support Case Check List <a name="release"></a>
+## Support Case Check List <a name="check-list"></a>
 
-### New Support Cases <a name="release"></a>
+### New Support Cases <a name="check-list-new-case"></a>
 
 Check-list to require when **new** support case has been opened:
 
 - Documentation: Installing Steps containing the flavors/size of the Infrastructure and the steps to install OCP
 - Documentation: Diagram of the Architecture including zonal deployment
 - Archive with Certification results
-- Archie with must-gather
+- Archive with must-gather
 - Installation Check List (file `use-installation-checklist.md`) with the details of the installation
 
-### New Executions <a name="release"></a>
+### New Executions <a name="check-list-new-executions"></a>
 
 The following assets, certification assets, should be updated when certain conditions happen:
 
@@ -43,59 +43,77 @@ The following conditions require new certification assets:
 - Any Infrastructure component(s) (e.g.: server size, disk category, ELB type/size/config) or cluster dependencies (e.g.: external storage backend for image registry) have been modified
 
 
-## Review Environment <a name="release"></a>
+## Review Environment <a name="setup"></a>
 
-### Setting up local environment <a name="release"></a>
+### Setting up local environment <a name="setup-install"></a>
 
 > TODO: link with each tool URL
 
-- Download the OPCT
-- Download the omg
+- Download the [OPCT](./user.md#install)
+- Download the [`omg`](https://github.com/kxr/o-must-gather)
 
-### Download dependencies <a name="release"></a>
+```bash
+pip3 install o-must-gather --user
+```
 
-- Download the Baseline execution for the version used by the partner
+### Download dependencies <a name="setup-download-dependencies"></a>
 
-> TODO: Link to GDrive path
+- Download the Baseline results from the <TBD>`quay.io/ocp-cert/baseline-results`
+
+> TODO: add the steps to pull and extract the results from the baseline repository
 
 - Download the suite test list for the version used by the partner
 
-> TODO: Currently the test list is not included in the resulting archive, need to create the steps to extract the openshift-tests util from the same release used by the partner, and extract the test list.
-
-### Download Partner Results <a name="release"></a>
-
-- Download the Provider certification archive
-- Download the Must-gather
-
-## Review guide: exploring the failed tests <a name="release"></a>
-
-> NOTE/Question: It's not clear if we could keep that section on the `user-results-review.md` instead of one dedicated to supporting - as it can be used in the future by partners and support.
-
-> TODO: the steps below use the subcommand `process` to apply filters on the failed tests and help to keep the initial focus of the investigation on the failures exclusively on the partner's results. Using only tests included on the respective suite, isolating from common failures from Baseline results or Flakes from CI. To see more details about the filters read the [dev documentation describing filters flow](./dev.md#dev-diagram-filters).
-
-### Exploring the failures
-
-Compare the provider results with the baseline;
-
 ```bash
-./openshift-provider-cert-linux-amd64 process \
-    --baseline opct_baseline-ocp_4.11.4-platform_none-hw-date_uuid.tar.gz \
-    --base-suite-ocp ./test-list_openshift-tests_openshift-validated.txt \
-    --base-suite-k8s ./test-list_openshift-tests_kubernetes-conformance.txt \
-    202210132151_sonobuoy_6af99324-2dc6-4de4-938c-200b84111481.tar.gz
+RELEASE_VERSION="4.11.4->CHANGE_ME"
+TESTS_IMG=$(oc adm release info ${RELEASE_VERSION} --image-for='tests')
+oc image extract ${TESTS_IMG} --file="/usr/bin/openshift-tests"
+chmod u+x ./openshift-tests
+./openshift-tests run --dry-run kubernetes/conformance > ./test-list_openshift-tests_kubernetes-conformance.txt
+./openshift-tests run --dry-run openshift/conformance > ./test-list_openshift-tests_openshift-validated.txt
 ```
 
-### Extracting the failures to a local directory
+### Download Partner Results <a name="setup-download-results"></a>
 
-Compare the results AND extract the files to the local directory `./results-provider-processed`
+- Download the Provider certification archive from the Support Case. Example file name: `retrieved-archive.tar.gz`
+- Download the Must-gather from the Support Case. Example file name: `must-gather.tar.gz`
+
+## Review guide: exploring the failed tests <a name="review-process"></a>
+
+The steps below use the subcommand `process` to apply filters on the failed tests and help to keep the initial focus of the investigation on the failures exclusively on the partner's results.
+
+The filters use only tests included in the respective suite, isolating from common failures identified on the Baseline results or Flakes from CI. To see more details about the filters, read the [dev documentation describing filters flow](./dev.md#dev-diagram-filters).
+
+Required to use this section:
+- OPCT CLI downloaded to the current directory
+- OpenShift e2e test suite exported to the current directory
+- Baseline results exported to the current directory
+- The Certification Result is in the current directory
+
+
+### Exploring the failures <a name="review-process-exploring"></a>
+
+Compare the provider results with the baseline:
 
 ```bash
 ./openshift-provider-cert-linux-amd64 process \
-    --baseline opct_baseline-ocp_4.11.4-platform_none-hw-date_uuid.tar.gz \
+    --baseline ./opct_baseline-ocp_4.11.4-platform_none-provider-date_uuid.tar.gz \
+    --base-suite-ocp ./test-list_openshift-tests_openshift-validated.txt \
+    --base-suite-k8s ./test-list_openshift-tests_kubernetes-conformance.txt \
+    ./<timestamp>_sonobuoy_<uuid>.tar.gz
+```
+
+### Extracting the failures to a local directory <a name="review-process-extracting"></a>
+
+Compare the results and extract the files (option `--save-to`) to the local directory `./results-provider-processed`:
+
+```bash
+./openshift-provider-cert-linux-amd64 process \
+    --baseline ./opct_baseline-ocp_4.11.4-platform_none-provider-date_uuid.tar.gz \
     --base-suite-ocp ./test-list_openshift-tests_openshift-validated.txt \
     --base-suite-k8s ./test-list_openshift-tests_kubernetes-conformance.txt \
     --save-to processed \
-    202210132151_sonobuoy_6af99324-2dc6-4de4-938c-200b84111481.tar.gz
+    ./<timestamp>_sonobuoy_<uuid>.tar.gz
 ```
 
 This is the expected output:
@@ -169,7 +187,7 @@ Flakes  Perc   TestName
 
 > TODO: create the index with a legend with references to the output.
 
-### Understanding the extracted results <a name="release"></a>
+### Understanding the extracted results <a name="review-process-explain"></a>
 
 The data extracted to local storage contains the following files for each plugin:
 
@@ -226,7 +244,9 @@ processed/
 3 directories, 300 files
 ```
 
-### Review Guidelines <a name="release"></a>
+### Review Guidelines <a name="review-process-guidelines"></a>
+
+> WIP: the idea here is to provide guidance on the main points/assets to review, pointing to the details on the respective/dedicated sections.
 
 This section is a guide of the initial files to review when start exploring the resulting archive.
 
@@ -237,7 +257,3 @@ Items to review:
 - Check if the failures are 0, if not, need to check one by one
 - To provide a better interaction between the review process, one spreadsheet named `failures-index.xlsx` is created inside the extracted directory (`./processed/` exemplified in the last section). It can be used as a tool to review failures and take notes about them.
 - Check details of each test failed on the sub-directory `failures-provider-filtered/*.txt`.
-
-## <TODO>
-
-> I am thinking to move the troubleshooting section from user Doc to here or to "user-result-review.md" to avoid keeping useful commands potentially used by Partners in the "Support" Document. Ideas?

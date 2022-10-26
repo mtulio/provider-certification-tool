@@ -1,6 +1,6 @@
 # OpenShift Provider Certification Tool - Installation Review
 
-> WIP: this document is working in progress
+> WIP - this document is working in progress
 
 > TODO: steps describing in detail the topics to review before submitting the results.
 

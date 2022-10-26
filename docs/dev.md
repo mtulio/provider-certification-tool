@@ -85,7 +85,7 @@ Here's the highest level diagram showing the filenames or packages for code:
 
 #### CLI Result filters <a name="dev-diagram-filters"></a>
 
-The CLI currently implements a few filters to help the reviewers (Partners, Support, Engineering teams) to find the root cause of the failures. The filers use the following data sources to improve the feedback of results provided by the subcommand `process` by plugin level:
+The CLI currently implements a few filters to help the reviewers (Partners, Support, Engineering teams) to find the root cause of the failures. The filters consumes the data sources below to improve the feedback, by plugin level, when using the command `process`:
 
 - A. `"Provider's Result"`: This is the original list of failures by the plugin available on the command `results`
 - B. `"Suite List"`: This is the list of e2e tests available on the respective suite. For example: plugin `openshift-kubernetes-conformance` uses the suite `kubernetes/conformance`
