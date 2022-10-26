@@ -185,6 +185,11 @@ How to submit OpenShift Certification Test results:
 - Click `Submit` when you have complete all the required information.
 - A Product Certification case will be created, and please follow the instructions provided to add the test results and any other related material for us to review.
 - Go to [`Support > My support tickets`](https://connect.redhat.com/support/technology-partner/#/case/list) to find the case and review status and/or to add comments to the case.
+
+Required files to attach to a NEW support case:
+
+- Attach the Installation Document used describing how your installing the Cluster
+- Download, review and attach the [`user-installation-checklist.md`](./user-installation-checklist.md)
 - Attach the `retrieved-archive.tar.gz` result file to the case.
 - Attach the `must-gather.tar.gz` file to the case.
 

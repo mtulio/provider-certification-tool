@@ -1,51 +1,79 @@
 # OpenShift Provider Certification Tool - Support Guide
 
-> WIP: this document is working in progresss
+> WIP: this document is working in progress
 
-## Support Case Check List
+- [Support Case Check List](#check-list)
+  - [New Support Cases](#check-list-new-case)
+  - [New Executions](#check-list-new-executions)
+- [Setting up the Review Environment](#setup)
+  - [Install tools](#setup-install)
+  - [Download dependencies](#setup-download-dependencies)
+  - [Download Partner Results](#setup-download-results)
+- [Review guide: exploring the failed tests](#review-process)
+  - [Exploring the failures](#review-process-exploring)
+  - [Extracting the failures to local directory](#review-process-extracting)
+  - [Explaning the extracted files](#review-process-explain)
+  - [Review Guidelines](#review-process-guidelines)
 
-### Initial
 
-Check-list to require when new support case have beem opened:
+## Support Case Check List <a name="release"></a>
 
-- Documentation: Installing Steps containg the flavors/size of the Infrastructure and the steps to install OCP
+### New Support Cases <a name="release"></a>
+
+Check-list to require when **new** support case has been opened:
+
+- Documentation: Installing Steps containing the flavors/size of the Infrastructure and the steps to install OCP
 - Documentation: Diagram of the Architecture including zonal deployment
 - Archive with Certification results
 - Archie with must-gather
+- Installation Check List (file `use-installation-checklist.md`) with the details of the installation
 
-### New Executions
+### New Executions <a name="release"></a>
 
-The following assets, certification assets, should be updated when certain conditions happend:
+The following assets, certification assets, should be updated when certain conditions happen:
 
 - Certification Results
 - Must Gather
-- Install Documentation (when any item/flavor/configuration have beem modified)
+- Install Documentation (when any item/flavor/configuration has been modified)
 
 
-The following conditions requires new data:
+The following conditions require new certification assets:
 
-- OpenShift Container Platform has been updated
-- Any Infrastructure component (e.g.: server size, disk category, ELB type/size/config) or cluster dependencies (e.g.: external storage backend for image registry) have beem modified
+- The version of OpenShift Container Platform has been updated
+- Any Infrastructure component(s) (e.g.: server size, disk category, ELB type/size/config) or cluster dependencies (e.g.: external storage backend for image registry) have been modified
 
 
-## Review Environment
+## Review Environment <a name="release"></a>
 
-### Setting up local environment
+### Setting up local environment <a name="release"></a>
+
+> TODO: link with each tool URL
 
 - Download the OPCT
 - Download the omg
 
-### Download dependencies
+### Download dependencies <a name="release"></a>
 
-- Download the Baseline execution for the version used by partner
-- Download the suite test list fo the version used by partner
+- Download the Baseline execution for the version used by the partner
 
-### Download Partner Results
+> TODO: Link to GDrive path
+
+- Download the suite test list for the version used by the partner
+
+> TODO: Currently the test list is not included in the resulting archive, need to create the steps to extract the openshift-tests util from the same release used by the partner, and extract the test list.
+
+### Download Partner Results <a name="release"></a>
 
 - Download the Provider certification archive
 - Download the Must-gather
 
-### Extract Data
+## Review guide: exploring the failed tests <a name="release"></a>
+
+> NOTE/Question: It's not clear if we could keep that section on the `user-results-review.md` instead of one dedicated to supporting - as it can be used in the future by partners and support.
+
+> TODO: the steps below use the subcommand `process` to apply filters on the failed tests and help to keep the initial focus of the investigation on the failures exclusively on the partner's results. Using only tests included on the respective suite, isolating from common failures from Baseline results or Flakes from CI. To see more details about the filters read the [dev documentation describing filters flow](./dev.md#dev-diagram-filters).
+
+### Exploring the failures
 
 Compare the provider results with the baseline;
 
@@ -57,7 +85,9 @@ Compare the provider results with the baseline;
     202210132151_sonobuoy_6af99324-2dc6-4de4-938c-200b84111481.tar.gz
 ```
 
-Compare the results AND extract the files to local directory `./results-provider-processed`
+### Extracting the failures to a local directory
+
+Compare the results AND extract the files to the local directory `./results-provider-processed`
 
 ```bash
 ./openshift-provider-cert-linux-amd64 process \
@@ -68,13 +98,10 @@ Compare the results AND extract the files to local directory `./results-provider
     202210132151_sonobuoy_6af99324-2dc6-4de4-938c-200b84111481.tar.gz
 ```
 
-### Understanding the Results (stdout)
+This is the expected output:
 
-- Header
+> Note: the tabulation is not ok when pasting to Markdown
 
-> TODO: the tabulation is not ok when pasting to Markdown
-
-- Processed Summary (with example results)
 ```bash
 (...Header...)
 
@@ -112,16 +139,15 @@ Compare the results AND extract the files to local directory `./results-provider
 
  Total Tests by Certification Layer: 
 
-
  => openshift-kube-conformance: (2 failures, 2 flakes)
 
  --> Failed tests to Review (without flakes) - Immediate action:
 <empty>
 
  --> Failed flake tests - Statistic from OpenShift CI
-Flakes	Perc	 TestName
-1	0.138%	[sig-api-machinery] CustomResourcePublishOpenAPI [Privileged:ClusterAdmin] works for multiple CRDs of same group and version but different kinds [Conformance] [Suite:openshift/conformance/parallel/minimal] [Suite:k8s]
-2	0.275%	[sig-api-machinery] ResourceQuota should create a ResourceQuota and capture the life of a secret. [Conformance] [Suite:openshift/conformance/parallel/minimal] [Suite:k8s]
+Flakes  Perc   TestName
+1 0.138%  [sig-api-machinery] CustomResourcePublishOpenAPI [Privileged:ClusterAdmin] works for multiple CRDs of same group and version but different kinds [Conformance] [Suite:openshift/conformance/parallel/minimal] [Suite:k8s]
+2 0.275%  [sig-api-machinery] ResourceQuota should create a ResourceQuota and capture the life of a secret. [Conformance] [Suite:openshift/conformance/parallel/minimal] [Suite:k8s]
 
 
  => openshift-conformance-validated: (7 failures, 5 flakes)
@@ -131,17 +157,19 @@ Flakes	Perc	 TestName
 [sig-storage] CSI Volumes [Driver: csi-hostpath] [Testpattern: Dynamic PV (default fs)] provisioning should provision storage with pvc data source [Suite:openshift/conformance/parallel] [Suite:k8s]
 
  --> Failed flake tests - Statistic from OpenShift CI
-Flakes	Perc	 TestName
-101	10.576%	[sig-arch][bz-DNS][Late] Alerts alert/KubePodNotReady should not be at or above pending in ns/openshift-dns [Suite:openshift/conformance/parallel]
-67	7.016%	[sig-arch][bz-Routing][Late] Alerts alert/KubePodNotReady should not be at or above pending in ns/openshift-ingress [Suite:openshift/conformance/parallel]
-2	0.386%	[sig-imageregistry] Image registry should redirect on blob pull [Suite:openshift/conformance/parallel]
-32	4.848%	[sig-network][Feature:EgressFirewall] egressFirewall should have no impact outside its namespace [Suite:openshift/conformance/parallel]
-11	2.402%	[sig-network][Feature:EgressFirewall] when using openshift-sdn should ensure egressnetworkpolicy is created [Suite:openshift/conformance/parallel]
+Flakes  Perc   TestName
+101 10.576% [sig-arch][bz-DNS][Late] Alerts alert/KubePodNotReady should not be at or above pending in ns/openshift-dns [Suite:openshift/conformance/parallel]
+67  7.016%  [sig-arch][bz-Routing][Late] Alerts alert/KubePodNotReady should not be at or above pending in ns/openshift-ingress [Suite:openshift/conformance/parallel]
+2   0.386%  [sig-imageregistry] Image registry should redirect on blob pull [Suite:openshift/conformance/parallel]
+32  4.848%  [sig-network][Feature:EgressFirewall] egressFirewall should have no impact outside its namespace [Suite:openshift/conformance/parallel]
+11  2.402%  [sig-network][Feature:EgressFirewall] when using openshift-sdn should ensure egressnetworkpolicy is created [Suite:openshift/conformance/parallel]
 
  Data Saved to directory './processed/'
 ```
 
-### Understanding the Result files
+> TODO: create the index with a legend with references to the output.
+
+### Understanding the extracted results <a name="release"></a>
 
 The data extracted to local storage contains the following files for each plugin:
 
@@ -151,7 +179,7 @@ The data extracted to local storage contains the following files for each plugin
 - `test_${PLUGIN_NAME}_provider_filter2-baseline.txt`: List of test failures tests* after applying all filters
 - `test_${PLUGIN_NAME}_provider_suite_full.txt`: List with suite e2e tests
 
-The base directory (`./results-provider-processed`) also contains the entire errors message for each failed tests. Those errors are saved into individual files onto those sub-directories (for each plugin):
+The base directory (`./results-provider-processed`) also contains the **all error messages (stdout and fail summary)** for each failed test. Those errors are saved into individual files onto those sub-directories (for each plugin):
 
 - `failures-baseline/${PLUGIN_NAME}_${INDEX}-failure.txt`: the error summary
 - `failures-baseline/${PLUGIN_NAME}_${INDEX}-systemOut.txt`: the entire stdout of the failed plugin
@@ -161,9 +189,13 @@ Considerations:
 - `${PLUGIN_NAME}`: currently these plugins names are valid: [`openshift-validated`, `kubernetes-conformance`]
 - `${INDEX}` is the simple index ordered by test name on the list
 
+> TODO: mention the spreadsheet `failures-index.xlsx` created. It can be used to take notes of what was already reviewed by each layer/stakeholder (partner, support, and engineering) reviewing the errors, and also to improve the communication between the parts. For example, the partner could provide that google sheet with notes to check what he already reviewed (as we [mrbraga and robert] do while reviewing, and submitting it). The support can keep that list updated sharing it with engineering, and so on.
+
 Example of files on the extracted directory:
 
-```
+> Review if we need it
+
+```bash
 $ tree processed/
 processed/
 ├── failures-baseline
@@ -171,15 +203,15 @@ processed/
 ├── failures-provider
 [redacted]
 ├── failures-provider-filtered
-│   ├── kubernetes-conformance_1-1-failure.txt
-│   ├── kubernetes-conformance_1-1-systemOut.txt
-│   ├── kubernetes-conformance_2-2-failure.txt
-│   ├── kubernetes-conformance_2-2-systemOut.txt
-│   ├── openshift-validated_1-31-failure.txt
-│   ├── openshift-validated_1-31-systemOut.txt
+│   ├── kubernetes-conformance_1-1-failure.txt
+│   ├── kubernetes-conformance_1-1-systemOut.txt
+│   ├── kubernetes-conformance_2-2-failure.txt
+│   ├── kubernetes-conformance_2-2-systemOut.txt
+│   ├── openshift-validated_1-31-failure.txt
+│   ├── openshift-validated_1-31-systemOut.txt
 [redacted]
-│   ├── openshift-validated_7-1-failure.txt
-│   └── openshift-validated_7-1-systemOut.txt
+│   ├── openshift-validated_7-1-failure.txt
+│   └── openshift-validated_7-1-systemOut.txt
 ├── tests_kubernetes-conformance_baseline_failures.txt
 ├── tests_kubernetes-conformance_provider_failures.txt
 ├── tests_kubernetes-conformance_provider_filter1-suite.txt
@@ -194,13 +226,18 @@ processed/
 3 directories, 300 files
 ```
 
-### Review Guidelines
+### Review Guidelines <a name="release"></a>
 
-Overview of the steps:
+This section is a guide of the initial files to review when start exploring the resulting archive.
 
 Items to review:
 
-- OCP version match the certification request
+- OCP version matches the certification request
 - Review the result file
 - Check if the failures are 0, if not, need to check one by one
-- Check details of each test failed on the sub-directory `failures-provider-filtered`
+- To provide a better interaction between the review process, one spreadsheet named `failures-index.xlsx` is created inside the extracted directory (`./processed/` exemplified in the last section). It can be used as a tool to review failures and take notes about them.
+- Check details of each test failed on the sub-directory `failures-provider-filtered/*.txt`.
+
+## <TODO>
+
+> I am thinking to move the troubleshooting section from user Doc to here or to "user-result-review.md" to avoid keeping useful commands potentially used by Partners in the "Support" Document. Ideas?
