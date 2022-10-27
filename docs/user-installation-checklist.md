@@ -40,6 +40,7 @@ if you have any questions you can:
 
 - [ ] I have reviewed all the Health Check requirements
 - [ ] The Health Checks for KAS listeners are HTTP or HTTPS
+- [ ] The DNS `api-int.<cluster>.<domain>` is properly configured with **private** Load Balancer address
 - [ ] I have reviewed the Hairpin connection problem, and the Load Balancer used to kubernetes-api is not impacted by it
 
 - Load Balancer flavor/type used by kubernetes API:
