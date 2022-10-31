@@ -47,8 +47,6 @@ The following conditions require new certification assets:
 
 ### Setting up local environment <a name="setup-install"></a>
 
-> TODO: link with each tool URL
-
 - Download the [OPCT](./user.md#install)
 - Download the [`omg`](https://github.com/kxr/o-must-gather)
 

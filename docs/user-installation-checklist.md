@@ -57,7 +57,7 @@ If you have any questions you can:
 
 > TODO: provide an example of how to check it. (link to the "Installation Review" document)
 
-- [ ] I ran the etcd performance tool to measure the performance of the disk used by the mount point used by etcd(`/var/lib/etcd`) and it reported below 20 ms (milliseconds).
+- [ ] I ran the etcd performance tool to measure the performance of the disk used by the mount point used by etcd(`/var/lib/etcd`) and it reported below than 10 ms (milliseconds).
 
 *See more at [User Installation Review > Components > etcd](./user-installation-review.md#components-etcd)*
 

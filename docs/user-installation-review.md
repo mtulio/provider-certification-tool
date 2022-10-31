@@ -11,6 +11,7 @@ This document is also a helper for ["OPCT - Installation Checklist"](./user-inst
 
 - [Compute](#compute)
 - [Load Balancers](#loadbalancers)
+    - [Review the Load Balancer Size](#loadbalancers-size)
     - [Review Health Check configurations](#loadbalancers-healthcheck)
     - [Review Hairpin Traffic](#loadbalancers-hairpin)
 - [Components](#components)
@@ -27,6 +28,20 @@ This document is also a helper for ["OPCT - Installation Checklist"](./user-inst
 - Minimal required for Compute nodes: [User Documentation -> Pre-requisites](./user.md#prerequisites)
 
 ## Load Balancers <a name="loadbalancers"></a>
+
+Review the Load Balancer requirements: [Load balancing requirements for user-provisioned infrastructure](https://docs.openshift.com/container-platform/4.11/installing/installing_platform_agnostic/installing-platform-agnostic.html#installation-load-balancing-user-infra_installing-platform-agnostic)
+
+### Review the Load Balancer size <a name="loadbalancers-size"></a>
+
+> TODO: Need to check if we have any information in our documentation. I am considering the current deployments of Alibaba and NLB (auto-scaling)
+
+The Load Balancer used by the Kubernetes API must support a throughput higher than 100Mbp/s.
+
+Reference:
+
+* [AWS](https://github.com/openshift/installer/blob/master/data/data/aws/cluster/vpc/master-elb.tf#L3): NLB (Network Load Balancer)
+* [Alibaba](https://github.com/openshift/installer/blob/master/data/data/alibabacloud/cluster/vpc/slb.tf#L49): `slb.s2.small`
+* [Azure](https://github.com/openshift/installer/blob/master/data/data/azure/vnet/internal-lb.tf#L7): Standard
 
 ### Review the private Load Balancer <a name="loadbalancers"></a>
 
@@ -54,19 +69,6 @@ The kube-apiserver has a graceful termination engine that requires the Load Bala
 | -- | -- | -- | -- | -- | -- | -- |
 | Kubernetes API Server | HTTP* | 6080 | /readyz | 2  | 10 | 10 |
 | Machine Config Server | HTTP* | 22624 | /healthz | 2  | 10 | 10 |
-
-
-- Flavor/Size
-
-> TODO: Need to check if we have any information in our documentation. I am considering the current deployments of Alibaba and NLB (auto-scaling)
-
-The Load Balancer used by the Kubernetes API must support a throughput higher than 100Mbp/s
-
-Reference:
-
-* [AWS](https://github.com/openshift/installer/blob/master/data/data/aws/cluster/vpc/master-elb.tf#L3): NLB (Network Load Balancer)
-* [Alibaba](https://github.com/openshift/installer/blob/master/data/data/alibabacloud/cluster/vpc/slb.tf#L49): `slb.s2.small`
-* [Azure]()https://github.com/openshift/installer/blob/master/data/data/azure/vnet/internal-lb.tf#L7: Standard
 
 
 ### Review Hairpin Traffic <a name="loadbalancers-hairpin"></a>
@@ -142,9 +144,9 @@ oc image extract ${TOOLS_IMAGE} --file="/usr/bin/insights-ocp-etcd-logs"
 chmod u+x insights-ocp-etcd-logs
 ```
 
-- Generate the overall report
+- Overall report:
 
-> Note: This report can be useless depending on the history of logs. We recommend looking at the next report which aggregates by the hour, so you can check the time frame the certification has been executed
+> Note: This report can not be usefull depending how old is the logs. We recommend looking at the next report which aggregates by the hour, so you can check the time frame the certification has been executed
 
 > TODO: the tool `insights-ocp-etcd-logs` could read all the logs from stdin, filter by str, then report the buckets - avoiding extracting complex greps
 
@@ -156,7 +158,7 @@ grep -rni "apply request took too long" ${MUST_GATHER_PATH} \
     | ./insights-ocp-etcd-logs
 ```
 
-- Generate the overall report aggregated by the hour:
+- Report aggregated by hour:
 
 > TODO: also improve the tool `insights-ocp-etcd-logs` to report by the hour - maybe using flags
 
@@ -193,7 +195,13 @@ You should be able to access the registry and make sure you can push and pull im
 Please check the OpenShift documentation to validate it:
 
 - [Accessing the registry](https://docs.openshift.com/container-platform/4.11/registry/accessing-the-registry.html)
+- [Installing a cluster on any platform > Image registry storage configuration](https://docs.openshift.com/container-platform/4.11/installing/installing_platform_agnostic/installing-platform-agnostic.html#installation-registry-storage-config_installing-platform-agnostic)
 
+You can also explore the OpenShift sample projects that create PVC and BuildConfigs (which result in images being built and pushed to image registry). For example:
+
+```bash
+oc new-app nodejs-postgresql-persistent
+```
 
 ## <Open>
 
