@@ -4,25 +4,41 @@
 
 > TODO: steps describing in detail the topics to review before submitting the results.
 
-## Compute
+This document complements the [official page of "Installing a cluster on any platform"](https://docs.openshift.com/container-platform/4.11/installing/installing_platform_agnostic/installing-platform-agnostic.html) to review specific configurations and components after the cluster has been installed.
+
+This document is also a helper for ["OPCT - Installation Checklist"](./user-installation-checklist.md) user document.
+
+
+- [Compute](#compute)
+- [Load Balancers](#loadbalancers)
+    - [Review Health Check configurations](#loadbalancers-healthcheck)
+    - [Review Hairpin Traffic](#loadbalancers-hairpin)
+- [Components](#components)
+    - [etcd](#components-etcd)
+        - [Review disk performance with etcd-fio](#components-etcd-ocp-fio)
+        - [Review etcd logs: etcd slow requests](#components-etcd-logs-slow-req)
+        - [Alternative: Mount /var/lib/etcd in separate disk](#components-etcd-logs-slow-req)
+    - [Image Registry](#components-imageregistry)
+
+## Compute <a name="compute"></a>
 
 > TODO: any compute specific?
 
 - Minimal required for Compute nodes: [User Documentation -> Pre-requisites](./user.md#prerequisites)
 
-## Load Balancers
+## Load Balancers <a name="loadbalancers"></a>
 
-- Private Load Balancers
+### Review the private Load Balancer <a name="loadbalancers"></a>
 
-The basic OpenShift Installations with support of external Load Balancers are used to deploy 3 Load Balancers: public and private for control plane services (Kubernetes API and Machine Config Server), and one public for the ingress.
+The basic OpenShift Installations with support of external Load Balancers deploy 3 Load Balancers: public and private for control plane services (Kubernetes API and Machine Config Server), and one public for the ingress.
 
-The address for the private Load Balancer must point to the DNS `api-int.<cluster>.<domain>`, which will be accessed for internal services.
+The DNS or IP address for the private Load Balancer must point to the DNS record `api-int.<cluster>.<domain>`, which will be accessed for internal services.
 
 Reference: [User-provisioned DNS requirements](https://docs.openshift.com/container-platform/4.11/installing/installing_platform_agnostic/installing-platform-agnostic.html#installation-dns-user-infra_installing-platform-agnostic)
 
-### Health Checks
+### Review Health Check configurations <a name="loadbalancers-healthcheck"></a>
 
-The kube-apiserver has a graceful termination engine that requires the Load Balancer health check probe to HTTP path.
+The kube-apiserver has a graceful termination engine that requires the Load Balancer health check probe to the HTTP path.
 
 | Service | Protocol | Port | Path | Threshold | Interval | Timeout |
 | -- | -- | -- | -- | -- | -- | -- |
@@ -31,7 +47,7 @@ The kube-apiserver has a graceful termination engine that requires the Load Bala
 | Ingress | TCP | 80 | - | 2  | 10 | 10 |
 | Ingress | TCP | 443 | - | 2  | 10 | 10 |
 
-> Note/Question: Not sure if we need to keep the HTTP (non-SSL on the doc). In the past, I talked with KAS team and he had plans to remove that option, but due to the limitation of a few cloud providers it will not. Some providers that still use this: [Alibaba](https://github.com/openshift/installer/blob/master/data/data/alibabacloud/cluster/vpc/slb.tf#L31), [GCP Public](https://github.com/openshift/installer/blob/master/data/data/gcp/cluster/network/lb-public.tf#L20-L21)
+> Note/Question: Not sure if we need to keep the HTTP (non-SSL on the doc). In the past, I talked with the KAS team and he had plans to remove that option, but due to the limitation of a few cloud providers, it will not. Some providers that still use this: [Alibaba](https://github.com/openshift/installer/blob/master/data/data/alibabacloud/cluster/vpc/slb.tf#L31), [GCP Public](https://github.com/openshift/installer/blob/master/data/data/gcp/cluster/network/lb-public.tf#L20-L21)
 *It's required to health check support HTTP protocol. If the Load Balancer used does not support SSL, alternatively and not preferably you can use HTTP - but never TCP:
 
 | Service | Protocol | Port | Path | Threshold | Interval | Timeout |
@@ -44,7 +60,7 @@ The kube-apiserver has a graceful termination engine that requires the Load Bala
 
 > TODO: Need to check if we have any information in our documentation. I am considering the current deployments of Alibaba and NLB (auto-scaling)
 
-The Load Balancer used by the Kubernetes API must support the throughput higher than 100Mbp/s
+The Load Balancer used by the Kubernetes API must support a throughput higher than 100Mbp/s
 
 Reference:
 
@@ -53,21 +69,29 @@ Reference:
 * [Azure]()https://github.com/openshift/installer/blob/master/data/data/azure/vnet/internal-lb.tf#L7: Standard
 
 
-### The Load Balancer and the Hairpin traffic
+### Review Hairpin Traffic <a name="loadbalancers-hairpin"></a>
 
-If the Load Balancer does not support hairpin traffic, when a backend is load-balanced to itself and the traffic is dropped, you need to provide a solution.
+If the Load Balancer does not allow hairpin traffic to the node, when a backend is load-balanced to itself and the traffic is dropped, you need to provide a solution.
 
-On the integrated clouds that do not support Hairpin traffic, the OpenShift provides one static pod to redirect traffic destined to the lb VIP back to the node on the kube-apiserver.
+On the integrated clouds that do not support Hairpin traffic, the OpenShift provides the static pod to redirect traffic destined for the lb VIP back to the node on the kube-apiserver.
 
-Reference:
+For Reference:
 
 - [Static pods to redirect hairpin traffic for Azure](https://github.com/openshift/machine-config-operator/blob/master/templates/master/00-master/azure/files/opt-libexec-openshift-azure-routes-sh.yaml)
 - [Static pods to redirect hairpin traffic for AlibabaCloud](https://github.com/openshift/machine-config-operator/tree/master/templates/master/00-master/alibabacloud)
 
+Steps to reproduce the Hairpin traffic to a node:
 
-## Components
+- deploy one sample pod
+- add one service with a node port
+- create the load balancer with the listener in any port. Example 80
+- create the backend/target group pointing to the node port
+- add the node which the pod is running to the LB/target group/backend nodes
+- try to reach the load balancer IP/DNS through the pod
 
-### etcd
+## Components <a name="components"></a>
+
+### etcd <a name="components-etcd"></a>
 
 Review etcd's disk speed requirements:
 
@@ -76,7 +100,7 @@ Review etcd's disk speed requirements:
 - https://www.ibm.com/cloud/blog/using-fio-to-tell-whether-your-storage-is-fast-enough-for-etcd
 - Backend Performance Requirements for OpenShift etcd: https://access.redhat.com/solutions/4770281
 
-#### Run OpenShift etcd-fio tests
+#### Review disk performance with etcd-fio <a name="components-etcd-ocp-fio"></a>
 
 The [KCS "How to Use 'fio' to Check Etcd Disk Performance in OCP"](https://access.redhat.com/solutions/4885641) is a guide to check if the disk used by etcd has the expected performance on OpenShift.
 
@@ -92,13 +116,13 @@ This section documents how to run dense disk tests using `fio`.
 - https://cloud.google.com/compute/docs/disks/benchmarking-pd-performance
 -->
 
-#### Review etcd logs: etcd slow requests
+#### Review etcd logs: etcd slow requests <a name="components-etcd-logs-slow-req"></a>
 
 This section provides a guide to check the etcd slow requests from the logs on the etcd pods to understand how the etcd is performing while running the e2e tests.
 
 The steps below use a utility `insights-ocp-etcd-logs` to parse the logs, aggregate the requests into buckets of 100ms from 200ms to 1s and report it on the stdout.
 
-This is the utility to help you to troubleshoot the slow requests into your cluster, and help to take some decisions like changing the flavor of the block device used by the control plane, increasing IOPS, changing the flavor of the instances, etc.
+This is the utility to help you to troubleshoot the slow requests in your cluster, and help to take some decisions like changing the flavor of the block device used by the control plane, increasing IOPS, changing the flavor of the instances, etc.
 
 There's no magic or desired number, but for reference, based on the observations from integrated platforms, is to have no more than 30-40% of requests above 500ms while running the certification tests.
 
@@ -120,7 +144,7 @@ chmod u+x insights-ocp-etcd-logs
 
 - Generate the overall report
 
-> Note: This report can be useless depending on the history of logs. We recommend looking the next report which aggregate by the hour, so you can check the time frame the certification has been executed
+> Note: This report can be useless depending on the history of logs. We recommend looking at the next report which aggregates by the hour, so you can check the time frame the certification has been executed
 
 > TODO: the tool `insights-ocp-etcd-logs` could read all the logs from stdin, filter by str, then report the buckets - avoiding extracting complex greps
 
@@ -134,7 +158,7 @@ grep -rni "apply request took too long" ${MUST_GATHER_PATH} \
 
 - Generate the overall report aggregated by the hour:
 
-> TODO: also improve the tool `insights-ocp-etcd-logs` to report by hour - maybe using flags
+> TODO: also improve the tool `insights-ocp-etcd-logs` to report by the hour - maybe using flags
 
 ```bash
 FILTER_MSG="apply request took too long"
@@ -153,7 +177,7 @@ for TS in $( grep -rni "${FILTER_MSG}" ${MUST_GATHER_PATH} \
 done
 ```
 
-#### Mount /var/lib/etcd in sepparate disk
+#### Mount /var/lib/etcd in sepparate disk <a name="components-etcd-mount"></a>
 
 One way to improve the performance on etcd is to use a dedicated block device.
 
@@ -162,17 +186,13 @@ You can mount `/var/lib/etcd` by following the documentation:
 - [OpenShift Docs: Disk partitioning](https://docs.openshift.com/container-platform/4.11/installing/installing_bare_metal/installing-bare-metal.html#installation-user-infra-machines-advanced_disk_installing-bare-metal)
 - [KCS: Mounting separate disk for OpenShift 4 etcd](https://access.redhat.com/solutions/5840061)
 
-### Image Registry
+### Image Registry <a name="components-imageregistry"></a>
 
-- persistent storage defined for image-registry
+You should be able to access the registry and make sure you can push and pull images on it.
 
-- make sure you can write on the image-registry
+Please check the OpenShift documentation to validate it:
 
-> TODO: describe steps to write to the registry
-
-- make sure you can use custom images from the image-registry
-
-> TODO: describe steps to create a deployment using a custom image
+- [Accessing the registry](https://docs.openshift.com/container-platform/4.11/registry/accessing-the-registry.html)
 
 
 ## <Open>

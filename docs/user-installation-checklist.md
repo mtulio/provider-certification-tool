@@ -7,15 +7,13 @@ Do not change the following markdown commented lines.
 __version__: 0.1.0-preview
 -->
 
-> Checklist that should be provided on the first submission, when opening the support case.
+This checklist should be provided for every new support case, or when any items have been changed (for Example, Compute flavor). This will help the Red Hat engineers while working in your partner support case during the certification process.
 
-This checklist should be provided every new support case, or when any items have been changed (Example, Compute flavor).
-
-if you have any questions you can:
+If you have any questions you can:
 
 - Review the [Installation Review Guide](./user-installation-review.md)
 - Review the [OpenShift Infrastructure Provider Guide](https://docs.providers.openshift.org/)
-- Review the [OpenShift Documentation Page related the version your are certifying](https://docs.openshift.com/container-platform)
+- Review the [OpenShift Documentation Page related to the version your are certifying](https://docs.openshift.com/container-platform)
 - Ask your Red Hat Partner
 
 ## Provider Information
@@ -36,6 +34,8 @@ if you have any questions you can:
 - Compute pool flavor:
 - Public documentation with the details of the flavor offering:
 
+*See more at [User Installation Review > Compute](./user-installation-review.md#compute)*
+
 ### Load Balancers
 
 - [ ] I have reviewed all the Health Check requirements
@@ -46,7 +46,10 @@ if you have any questions you can:
 - Load Balancer flavor/type used by kubernetes API:
 - Load Balancer flavor/type used by Default Ingress:
 
-### Component specific Review
+
+*See more at [User Installation Review > Load Balancers](./user-installation-review.md#load-balancers)*
+
+### Component-specific Review
 
 #### etcd
 
@@ -56,14 +59,14 @@ if you have any questions you can:
 
 - [ ] I ran the etcd performance tool to measure the performance of the disk used by the mount point used by etcd(`/var/lib/etcd`) and it reported below 20 ms (milliseconds).
 
-> TODO: link to the "Installation Review" document (and to KCS)
+*See more at [User Installation Review > Components > etcd](./user-installation-review.md#components-etcd)*
 
 #### image-registry
 
 - Persistent storage used on the internal image registry: 
 
-- [ ] I am able to push the image to the registry
-- [ ] I am able to pull images from the registry
-- [ ] I am able to create resources (deployment) with custom images
+- [ ] I can push the image to the registry
+- [ ] I can pull images from the registry
+- [ ] I can create resources (deployment) with custom images
 
-> TODO: link to the "Installation Review" document
+*See more at [User Installation Review > Components > image-registry](./user-installation-review.md#components-imageregistry)*

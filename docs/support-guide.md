@@ -11,7 +11,7 @@
     - [Download Partner Results](#setup-download-results)
 - [Review guide: exploring the failed tests](#review-process)
     - [Exploring the failures](#review-process-exploring)
-    - [Extracting the failures to local directory](#review-process-extracting)
+    - [Extracting the failures to the local directory](#review-process-extracting)
     - [Explaning the extracted files](#review-process-explain)
     - [Review Guidelines](#review-process-guidelines)
 
@@ -39,7 +39,7 @@ The following assets, certification assets, should be updated when certain condi
 
 The following conditions require new certification assets:
 
-- The version of OpenShift Container Platform has been updated
+- The version of the OpenShift Container Platform has been updated
 - Any Infrastructure component(s) (e.g.: server size, disk category, ELB type/size/config) or cluster dependencies (e.g.: external storage backend for image registry) have been modified
 
 
@@ -257,3 +257,9 @@ Items to review:
 - Check if the failures are 0, if not, need to check one by one
 - To provide a better interaction between the review process, one spreadsheet named `failures-index.xlsx` is created inside the extracted directory (`./processed/` exemplified in the last section). It can be used as a tool to review failures and take notes about them.
 - Check details of each test failed on the sub-directory `failures-provider-filtered/*.txt`.
+
+Additional items to review:
+
+- explore the must-gather objects according to findings on the failures files
+- run insights rules on the must-gather to check if there's a new know issue
+> TODO: provide steps to install and run insight OCP rules (opct could provide one container with it installed to avoid overhead and environment issues)

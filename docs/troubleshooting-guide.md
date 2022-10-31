@@ -14,14 +14,14 @@ If you already know the reason for a test failure then resolve the problem and r
 
 If you are not sure why you have failed tests or if some of the tests fail intermittently, proceed with the troubleshooting steps below.
 
-> Note: When runing the `preview` release of the certification tool, it's expected to have failed tests reported on the archive, we are working to improve the accuracy. If you are sure the failed tests reported on the archive is not related to your environment, feel free to contact your Red Hat partner to share the feedback.
+> Note: When running the `preview` release of the certification tool, it's expected to have failed tests reported on the archive, we are working to improve the accuracy. If you are sure the failed tests reported on the archive are not related to your environment, feel free to contact your Red Hat partner to share the feedback.
 
 
 ## Troubleshooting <a name="review-troubleshooting"></a>
 
 #### Review Results Archive <a name="review-archive"></a>
 
-The results archive file can be used to identify certification test failures so you can address them in your cluster installation process you are attempting to certify. 
+The results archive file can be used to identify certification test failures so you can address them in the cluster installation process you are attempting to certify.
 
 The result archive file follows the format of the backend used to run the certification environment: Sonobuoy.
 
@@ -53,7 +53,7 @@ results/
 
 To start exploring the problems in the certification environment, you can start looking into the `podlogs` directory.
 
-The file `results/plugins/<_plugin_name_>/sonobuoy_results.yaml` has the results for each test. If the test has been failed, you can see the reason on the field `.details.failure` and `.details.system-out`:
+The file `results/plugins/<_plugin_name_>/sonobuoy_results.yaml` has the results for each test. If the test has failed, you can see the reason in the field `.details.failure` and `.details.system-out`:
 
 Using the [`yq` tool](https://github.com/mikefarah/yq) you filter the failed tests by running this command:
 
@@ -77,11 +77,11 @@ When issues like this arise, you can see error events in the `openshift-provider
 
 If you run into issues where the certification pods are crashing or the command line tool is not working for some reason then troubleshooting the OpenShift cluster under test may be required. 
 
-Using the _status_ command will provide a high level overview but more information is needed to troubleshoot cluster level issues. A [Must Gather](https://docs.openshift.com/container-platform/latest/support/gathering-cluster-data.html) from the cluster and Inspection of sonobuoy namespace is the best way to start troubleshooting:
+Using the _status_ command will provide a high-level overview but more information is needed to troubleshoot cluster-level issues. A [Must Gather](https://docs.openshift.com/container-platform/latest/support/gathering-cluster-data.html) from the cluster and Inspection of the sonobuoy namespace is the best way to start troubleshooting:
 
 ```sh
 oc adm must-gather
 oc adm inspect openshift-provider-certification
 ```
 
-Use the two archives created by the commands above to begin troubleshooting. The must gather archive provides a snapshot view into the whole cluster. The inspection archive will contain information about the openshift provider certification namespace only.
+Use the two archives created by the commands above to begin troubleshooting. The must-gather archive provides a snapshot view of the whole cluster. The inspection archive will contain information about the openshift provider certification namespace only.
