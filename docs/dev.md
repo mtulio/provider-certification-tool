@@ -13,6 +13,7 @@ Table of Contents:
         - [CLI commands](#dev-diagram-cli)
         - [CLI Result filters](#dev-diagram-filters)
     - [Running Customized Certification Plugins](#dev-running-custom-plugins)
+    - [Project Documentation](#dev-project-docs)
 
 ## Release <a name="release"></a>
 
@@ -130,7 +131,7 @@ vi /tmp/openshift-kube-conformance.yaml
 openshift-provider-cert run --plugin /tmp/openshift-kube-conformance.yaml --plugin /tmp/openshift-conformance-validated.yaml
 ```
 
-### Project Documentation
+### Project Documentation  <a name="dev-project-docs"></a>
 
 The documentation is available in the directory `docs/`. You can render it as HTML using `mkdocs` locally - it's not yet published the HTML version.
 
