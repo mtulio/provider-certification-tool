@@ -1,7 +1,5 @@
 # OpenShift Provider Certification Tool - Support Guide
 
-> WIP - this document is working in progress
-
 - [Support Case Check List](#check-list)
     - [New Support Cases](#check-list-new-case)
     - [New Executions](#check-list-new-executions)

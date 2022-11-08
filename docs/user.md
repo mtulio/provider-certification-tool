@@ -85,7 +85,7 @@ There are two options to accomplish this type of setup:
 
 ```shell
 oc label node <node_name> node-role.kubernetes.io/tests=""
-oc taint node <node_name> node-role.kubernetes.io/tests="":NoSchedule
+oc adm taint node <node_name> node-role.kubernetes.io/tests="":NoSchedule
 ```
 
 ##### Option B: Machine Set 

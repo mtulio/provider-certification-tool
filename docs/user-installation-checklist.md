@@ -1,6 +1,4 @@
-# OPCT - Cluster Installation Checklist
-
-> WIP - this document is working in progress
+# OpenShift Provider Certification Tool - Cluster Installation Checklist
 
 <!--
 Do not change the following markdown commented lines.
@@ -38,13 +36,20 @@ If you have any questions you can:
 
 ### Load Balancers
 
+Load Balancer deployment:
+- [ ] I am using one Load Balancer dedicated to API
+- [ ] I am using one Load Balancer dedicated to Ingress
+- [ ] I am using the same Load Balancer for API and Ingress
+
+- Load Balancer flavor/type used by API:
+- Load Balancer flavor/type used by Ingress:
+
+API Load Balancer details:
 - [ ] I have reviewed all the Health Check requirements
-- [ ] The Health Checks for KAS listeners are HTTP or HTTPS
+- [ ] The Health Checks for kube-apiserver listeners are HTTP or HTTPS
 - [ ] The DNS `api-int.<cluster>.<domain>` is properly configured with **private** Load Balancer address
 - [ ] I have reviewed the Hairpin connection problem, and the Load Balancer used to kubernetes-api is not impacted by it
-
-- Load Balancer flavor/type used by kubernetes API:
-- Load Balancer flavor/type used by Default Ingress:
+- [ ] The API load balancer is configured to take a maximum of 30 seconds from the time the API server turns off the `/readyz` endpoint to the removal of the API server instance from the pool.
 
 
 *See more at [User Installation Review > Load Balancers](./user-installation-review.md#load-balancers)*

@@ -2,8 +2,6 @@
 
 > WIP - this document is working in progress
 
-> TODO: steps describing in detail the topics to review before submitting the results.
-
 This document complements the [official page of "Installing a cluster on any platform"](https://docs.openshift.com/container-platform/4.11/installing/installing_platform_agnostic/installing-platform-agnostic.html) to review specific configurations and components after the cluster has been installed.
 
 This document is also a helper for ["OPCT - Installation Checklist"](./user-installation-checklist.md) user document.
@@ -23,8 +21,6 @@ This document is also a helper for ["OPCT - Installation Checklist"](./user-inst
 
 ## Compute <a name="compute"></a>
 
-> TODO: any compute specific?
-
 - Minimal required for Compute nodes: [User Documentation -> Pre-requisites](./user.md#prerequisites)
 
 ## Load Balancers <a name="loadbalancers"></a>
@@ -33,9 +29,9 @@ Review the Load Balancer requirements: [Load balancing requirements for user-pro
 
 ### Review the Load Balancer size <a name="loadbalancers-size"></a>
 
-> TODO: Need to check if we have any information in our documentation. I am considering the current deployments of Alibaba and NLB (auto-scaling)
+The Load Balancer used by API must support a throughput higher than 100Mbp/s.
 
-The Load Balancer used by the Kubernetes API must support a throughput higher than 100Mbp/s.
+<!-- We haven't this information in the Product Documentation, this minimal was based on the utilization, mainly when installing the cluster (higher than 10Mpbs/s on AWS), and on integrated providers: AWS (NLB) and AlibabaCloud (SLB flavor used by IPI). -->
 
 Reference:
 
@@ -62,13 +58,20 @@ The kube-apiserver has a graceful termination engine that requires the Load Bala
 | Ingress | TCP | 80 | - | 2  | 10 | 10 |
 | Ingress | TCP | 443 | - | 2  | 10 | 10 |
 
-> Note/Question: Not sure if we need to keep the HTTP (non-SSL on the doc). In the past, I talked with the KAS team and he had plans to remove that option, but due to the limitation of a few cloud providers, it will not. Some providers that still use this: [Alibaba](https://github.com/openshift/installer/blob/master/data/data/alibabacloud/cluster/vpc/slb.tf#L31), [GCP Public](https://github.com/openshift/installer/blob/master/data/data/gcp/cluster/network/lb-public.tf#L20-L21)
+<!-- > Note/Question: Not sure if we need to keep the HTTP (non-SSL on the doc). In the past, I talked with the KAS team and he had plans to remove that option, but due to the limitation of a few cloud providers, it will not. Some providers that still use this: [Alibaba](https://github.com/openshift/installer/blob/master/data/data/alibabacloud/cluster/vpc/slb.tf#L31), [GCP Public](https://github.com/openshift/installer/blob/master/data/data/gcp/cluster/network/lb-public.tf#L20-L21)
 *It's required to health check support HTTP protocol. If the Load Balancer used does not support SSL, alternatively and not preferably you can use HTTP - but never TCP:
 
 | Service | Protocol | Port | Path | Threshold | Interval | Timeout |
 | -- | -- | -- | -- | -- | -- | -- |
 | Kubernetes API Server | HTTP* | 6080 | /readyz | 2  | 10 | 10 |
 | Machine Config Server | HTTP* | 22624 | /healthz | 2  | 10 | 10 |
+
+-->
+
+
+Reminder for the API Load Balancer Health Check:
+
+*"The load balancer must be configured to take a maximum of 30 seconds from the time the API server turns off the /readyz endpoint to the removal of the API server instance from the pool. Within the time frame after /readyz returns an error or becomes healthy, the endpoint must have been removed or added. Probing every 5 or 10 seconds, with two successful requests to become healthy and three to become unhealthy, are well-tested values."*
 
 
 ### Review Hairpin Traffic <a name="loadbalancers-hairpin"></a>
@@ -138,6 +141,8 @@ export MUST_GATHER_PATH=${PWD}/must-gather.local.2905984348081335046
 
 - Extract the utility from the tools repository:
 
+> This binary will be available when this card will be completed: https://issues.redhat.com/browse/SPLAT-857
+
 ```bash
 TOOLS_IMAGE=$(skopeo inspect docker://quay.io/ocp-cert/tools:latest | jq .Digest)
 oc image extract ${TOOLS_IMAGE} --file="/usr/bin/insights-ocp-etcd-logs"
@@ -148,7 +153,7 @@ chmod u+x insights-ocp-etcd-logs
 
 > Note: This report can not be usefull depending how old is the logs. We recommend looking at the next report which aggregates by the hour, so you can check the time frame the certification has been executed
 
-> TODO: the tool `insights-ocp-etcd-logs` could read all the logs from stdin, filter by str, then report the buckets - avoiding extracting complex greps
+> More information about the utility: https://issues.redhat.com/browse/SPLAT-857
 
 ```bash
 grep -rni "apply request took too long" ${MUST_GATHER_PATH} \
@@ -159,8 +164,6 @@ grep -rni "apply request took too long" ${MUST_GATHER_PATH} \
 ```
 
 - Report aggregated by hour:
-
-> TODO: also improve the tool `insights-ocp-etcd-logs` to report by the hour - maybe using flags
 
 ```bash
 FILTER_MSG="apply request took too long"
@@ -203,6 +206,6 @@ You can also explore the OpenShift sample projects that create PVC and BuildConf
 oc new-app nodejs-postgresql-persistent
 ```
 
-## <Open>
+<!-- ## <Open>
 
-> Question: Anything else related to provider review findings that must be checked before submitting the results?
+> Question: Anything else related to provider review findings that must be checked before submitting the results? -->
