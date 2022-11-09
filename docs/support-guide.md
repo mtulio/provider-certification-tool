@@ -24,7 +24,7 @@ Check-list to require when **new** support case has been opened:
 - Documentation: Diagram of the Architecture including zonal deployment
 - Archive with Certification results
 - Archive with must-gather
-- Installation Check List (file `use-installation-checklist.md`) with the details of the installation
+- [Installation Checklist (file `user-installation-checklist.md`)](./user-installation-checklist.md) with the partner's update to sign off post-instalation items
 
 ### New Executions <a name="check-list-new-executions"></a>
 
