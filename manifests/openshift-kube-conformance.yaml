@@ -6,7 +6,7 @@ podSpec:
       emptyDir: {}
   containers:
     - name: report-progress
-      image: quay.io/ocp-cert/openshift-tests-provider-cert:stable
+      image: quay.io/ocp-cert/openshift-tests-provider-cert:devel
       imagePullPolicy: Always
       priorityClassName: system-node-critical
       command: ["./report-progress.sh"]
@@ -16,7 +16,7 @@ podSpec:
       - mountPath: /tmp/shared
         name: shared
       env:
-        - name: CERT_LEVEL
+        - name: PLUGIN_ID
           value: "0"
         - name: ENV_NODE_NAME
           valueFrom:
@@ -32,14 +32,14 @@ podSpec:
               fieldPath: metadata.namespace
 sonobuoy-config:
   driver: Job
-  plugin-name: openshift-kube-conformance
+  plugin-name: 10-openshift-kube-conformance
   result-format: junit
   description: The end-to-end tests maintained by Kubernetes to certify the platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-kube-conformance.yaml
   skipCleanup: true
 spec:
   name: plugin
-  image: quay.io/ocp-cert/openshift-tests-provider-cert:stable
+  image: quay.io/ocp-cert/openshift-tests-provider-cert:devel
   imagePullPolicy: Always
   priorityClassName: system-node-critical
   volumeMounts:
@@ -48,8 +48,10 @@ spec:
   - mountPath: /tmp/shared
     name: shared
   env:
-    - name: CERT_LEVEL
+    - name: PLUGIN_ID
       value: "0"
+    - name: DEV_MODE_COUNT
+      value: "20"
     - name: ENV_NODE_NAME
       valueFrom:
         fieldRef:

@@ -17,7 +17,7 @@ podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "1"
+          value: "3"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -32,8 +32,8 @@ podSpec:
               fieldPath: metadata.namespace
 sonobuoy-config:
   driver: Job
-  plugin-name: 20-openshift-conformance-validated
-  result-format: junit
+  plugin-name: 99-openshift-artifacts-collector
+  result-format: raw
   description: The end-to-end tests maintained by OpenShift to certify the Provider running the OpenShift Container Platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-validated.yaml
   skipCleanup: true
@@ -49,9 +49,7 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "1"
-    - name: DEV_MODE_COUNT
-      value: "20"
+      value: "3"
     - name: ENV_NODE_NAME
       valueFrom:
         fieldRef:

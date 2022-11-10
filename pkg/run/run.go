@@ -33,14 +33,21 @@ import (
 )
 
 type RunOptions struct {
-	plugins       *[]string
-	dedicated     bool
-	sonobuoyImage string
-	timeout       int
-	watch         bool
+	plugins        *[]string
+	dedicated      bool
+	sonobuoyImage  string
+	timeout        int
+	watch          bool
+	mode           string
+	upgradeVersion string
+	upgradeImage   string
 }
 
-const runTimeoutSeconds = 21600
+const (
+	runTimeoutSeconds      = 21600
+	dedicatedLabelKey      = "node-role.kubernetes.io/tests"
+	dedicatedLabelKeyValue = "node-role.kubernetes.io/tests="
+)
 
 func newRunOptions() *RunOptions {
 	return &RunOptions{
@@ -114,6 +121,9 @@ func NewCmdRun() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&o.dedicated, "dedicated", false, "Setup plugins to run in dedicated test environment.")
+	cmd.Flags().StringVar(&o.mode, "mode", "regular", "Run mode: Availble: regular, regular-upgrade, disconnected, disconnected-upgrade")
+	cmd.Flags().StringVar(&o.upgradeVersion, "upgrade-to-version", "", "Target OCP Version.")
+	cmd.Flags().StringVar(&o.upgradeImage, "upgrade-to-image", "", "Target OCP Image Digest.")
 	cmd.Flags().StringArrayVar(o.plugins, "plugin", nil, "Override default conformance plugins to use. Can be used multiple times. (default plugins can be reviewed with assets subcommand)")
 	cmd.Flags().StringVar(&o.sonobuoyImage, "sonobuoy-image", fmt.Sprintf("quay.io/ocp-cert/sonobuoy:%s", buildinfo.Version), "Image override for the Sonobuoy worker and aggregator")
 	cmd.Flags().IntVar(&o.timeout, "timeout", runTimeoutSeconds, "Execution timeout in seconds")
@@ -178,7 +188,7 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 	if r.dedicated {
 		log.Info("Ensuring proper node label for dedicated mode")
 		nodes, err := coreClient.Nodes().List(context.TODO(), metav1.ListOptions{
-			LabelSelector: "node-role.kubernetes.io/tests=",
+			LabelSelector: dedicatedLabelKeyValue,
 		})
 		if err != nil {
 			return err
@@ -259,7 +269,7 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 	if r.dedicated {
 		// Skip preflight checks and create namespace manually with Tolerations
 		tolerations, err := json.Marshal([]v1.Toleration{{
-			Key:      "node-role.kubernetes.io/tests",
+			Key:      dedicatedLabelKey,
 			Operator: v1.TolerationOpExists,
 			Value:    "",
 			Effect:   v1.TaintEffectNoSchedule,
@@ -273,7 +283,7 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 				Name: pkg.CertificationNamespace,
 				Annotations: map[string]string{
 					"scheduler.alpha.kubernetes.io/defaultTolerations": string(tolerations),
-					"openshift.io/node-selector":                       "node-role.kubernetes.io/tests=",
+					"openshift.io/node-selector":                       dedicatedLabelKeyValue,
 				},
 			},
 		}
@@ -362,13 +372,24 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 	aggConfig.Namespace = pkg.CertificationNamespace
 
 	// Fill out the Run configuration
+	// mode := ""
+	// upgradeToImage := ""
+	// if r.mode != "" {
+	// 	mode = r.mode
+	// 	upgradeToImage = r.upgradeImage
+	// }
 	runConfig := &sonobuoyclient.RunConfig{
 		GenConfig: sonobuoyclient.GenConfig{
-			Config:             aggConfig,
-			EnableRBAC:         true, // True because OpenShift uses RBAC
-			ImagePullPolicy:    config.DefaultSonobuoyPullPolicy,
-			StaticPlugins:      manifests,
-			PluginEnvOverrides: nil, // TODO We'll use this later
+			Config:          aggConfig,
+			EnableRBAC:      true, // True because OpenShift uses RBAC
+			ImagePullPolicy: config.DefaultSonobuoyPullPolicy,
+			StaticPlugins:   manifests,
+			// PluginEnvOverrides: map[string]map[string]string{
+			// 	"openshift-cluster-upgrade": {
+			// 		"TARGET_RELEASES": r.upgradeImage,
+			// 		"RUN_MODE":        r.mode,
+			// 	},
+			// },
 		},
 	}
 

@@ -17,7 +17,7 @@ podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "1"
+          value: "2"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -32,7 +32,7 @@ podSpec:
               fieldPath: metadata.namespace
 sonobuoy-config:
   driver: Job
-  plugin-name: 20-openshift-conformance-validated
+  plugin-name: 01-openshift-cluster-upgrade
   result-format: junit
   description: The end-to-end tests maintained by OpenShift to certify the Provider running the OpenShift Container Platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-validated.yaml
@@ -49,9 +49,14 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "1"
-    - name: DEV_MODE_COUNT
-      value: "20"
+      value: "05"
+    - name: TARGET_RELEASES
+      # 4.11.5 (can go from 4.11.4 and to 4.11.12)
+      #value: quay.io/openshift-release-dev/ocp-release@sha256:fe4d499ac9fc7d12fcfccf3d6ae8a916c31e282d18adbebb0456c0fd6aef02c9
+      # 4.11.12 (can go from 4.11.5)
+      #value: quay.io/openshift-release-dev/ocp-release@sha256:0ca14e0f692391970fc23f88188f2a21f35a5ba24fe2f3cb908fd79fa46458e6
+      # 4.10.36 (allows from 4.10.30)
+      value: quay.io/openshift-release-dev/ocp-release@sha256:afe912343dc35b6c2307e2e2b4d174057fd76095504215fe25277a795df8eae9
     - name: ENV_NODE_NAME
       valueFrom:
         fieldRef:
@@ -64,3 +69,10 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: metadata.namespace
+    - name: RUN_MODE
+      value: upgrade
+    - name: UPGRADE_RELEASES
+      valueFrom:
+        configMapKeyRef:
+          name: plugin-config
+          key: UPGRADE_TARGET_RELEASES
