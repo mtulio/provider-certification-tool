@@ -17,7 +17,7 @@ podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "0"
+          value: "10"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -49,7 +49,7 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "0"
+      value: "10"
     - name: DEV_MODE_COUNT
       value: "20"
     - name: ENV_NODE_NAME

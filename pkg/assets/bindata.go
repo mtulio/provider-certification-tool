@@ -75,7 +75,7 @@ var _manifestsOpenshiftArtifactsCollectorYaml = []byte(`podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "3"
+          value: "99"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -107,7 +107,7 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "3"
+      value: "99"
     - name: ENV_NODE_NAME
       valueFrom:
         fieldRef:
@@ -156,7 +156,7 @@ var _manifestsOpenshiftClusterUpgradeYaml = []byte(`podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "2"
+          value: "05"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -171,8 +171,8 @@ var _manifestsOpenshiftClusterUpgradeYaml = []byte(`podSpec:
               fieldPath: metadata.namespace
 sonobuoy-config:
   driver: Job
-  plugin-name: 01-openshift-cluster-upgrade
-  result-format: junit
+  plugin-name: 05-openshift-cluster-upgrade
+  result-format: raw
   description: The end-to-end tests maintained by OpenShift to certify the Provider running the OpenShift Container Platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-validated.yaml
   skipCleanup: true
@@ -188,16 +188,14 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "2"
-    - name: TARGET_RELEASES
-      # 4.11.5 (can go from 4.11.4 and to 4.11.12)
-      #value: quay.io/openshift-release-dev/ocp-release@sha256:fe4d499ac9fc7d12fcfccf3d6ae8a916c31e282d18adbebb0456c0fd6aef02c9
-      # 4.11.12 (can go from 4.11.5)
-      #value: quay.io/openshift-release-dev/ocp-release@sha256:0ca14e0f692391970fc23f88188f2a21f35a5ba24fe2f3cb908fd79fa46458e6
-      # 4.10.36 (allows from 4.10.30)
-      value: quay.io/openshift-release-dev/ocp-release@sha256:afe912343dc35b6c2307e2e2b4d174057fd76095504215fe25277a795df8eae9
-    - name: RUN_MODE
-      value: upgrade
+      value: "05"
+    # - name: TARGET_RELEASES
+    #   # 4.11.5 (can go from 4.11.4 and to 4.11.12)
+    #   #value: quay.io/openshift-release-dev/ocp-release@sha256:fe4d499ac9fc7d12fcfccf3d6ae8a916c31e282d18adbebb0456c0fd6aef02c9
+    #   # 4.11.12 (can go from 4.11.5)
+    #   #value: quay.io/openshift-release-dev/ocp-release@sha256:0ca14e0f692391970fc23f88188f2a21f35a5ba24fe2f3cb908fd79fa46458e6
+    #   # 4.10.36 (allows from 4.10.30)
+    #   value: quay.io/openshift-release-dev/ocp-release@sha256:afe912343dc35b6c2307e2e2b4d174057fd76095504215fe25277a795df8eae9
     - name: ENV_NODE_NAME
       valueFrom:
         fieldRef:
@@ -210,6 +208,16 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: metadata.namespace
+    - name: RUN_MODE
+      valueFrom:
+        configMapKeyRef:
+          name: plugins-config
+          key: run-mode
+    - name: UPGRADE_RELEASES
+      valueFrom:
+        configMapKeyRef:
+          name: plugins-config
+          key: upgrade-target-images
 `)
 
 func manifestsOpenshiftClusterUpgradeYamlBytes() ([]byte, error) {
@@ -246,7 +254,7 @@ var _manifestsOpenshiftConformanceValidatedYaml = []byte(`podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "1"
+          value: "20"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -278,7 +286,7 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "1"
+      value: "20"
     - name: DEV_MODE_COUNT
       value: "20"
     - name: ENV_NODE_NAME
@@ -329,7 +337,7 @@ var _manifestsOpenshiftKubeConformanceYaml = []byte(`podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "0"
+          value: "10"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -361,7 +369,7 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "0"
+      value: "10"
     - name: DEV_MODE_COUNT
       value: "20"
     - name: ENV_NODE_NAME

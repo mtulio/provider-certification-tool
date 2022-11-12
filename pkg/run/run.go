@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -22,7 +23,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg"
@@ -33,14 +33,13 @@ import (
 )
 
 type RunOptions struct {
-	plugins        *[]string
-	dedicated      bool
-	sonobuoyImage  string
-	timeout        int
-	watch          bool
-	mode           string
-	upgradeVersion string
-	upgradeImage   string
+	plugins       *[]string
+	dedicated     bool
+	sonobuoyImage string
+	timeout       int
+	watch         bool
+	mode          string
+	upgradeImage  string
 }
 
 const (
@@ -122,7 +121,6 @@ func NewCmdRun() *cobra.Command {
 
 	cmd.Flags().BoolVar(&o.dedicated, "dedicated", false, "Setup plugins to run in dedicated test environment.")
 	cmd.Flags().StringVar(&o.mode, "mode", "regular", "Run mode: Availble: regular, regular-upgrade, disconnected, disconnected-upgrade")
-	cmd.Flags().StringVar(&o.upgradeVersion, "upgrade-to-version", "", "Target OCP Version.")
 	cmd.Flags().StringVar(&o.upgradeImage, "upgrade-to-image", "", "Target OCP Image Digest.")
 	cmd.Flags().StringArrayVar(o.plugins, "plugin", nil, "Override default conformance plugins to use. Can be used multiple times. (default plugins can be reviewed with assets subcommand)")
 	cmd.Flags().StringVar(&o.sonobuoyImage, "sonobuoy-image", fmt.Sprintf("quay.io/ocp-cert/sonobuoy:%s", buildinfo.Version), "Image override for the Sonobuoy worker and aggregator")
@@ -134,6 +132,7 @@ func NewCmdRun() *cobra.Command {
 
 // PreRunCheck performs some checks before kicking off Sonobuoy
 func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
+	var namespace *v1.Namespace
 	coreClient := kclient.CoreV1()
 	rbacClient := kclient.RbacV1()
 
@@ -171,7 +170,7 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 		return errors.New("OpenShift Image Registry must deployed before certification can run")
 	}
 
-	// Check if sonobuoy namespace already exists
+	// // Check if sonobuoy namespace already exists
 	p, err := coreClient.Namespaces().Get(context.TODO(), pkg.CertificationNamespace, metav1.GetOptions{})
 	if err != nil {
 		// If error is due to namespace not being found, we continue.
@@ -182,13 +181,14 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 
 	// sonobuoy namespace exists so return error
 	if p.Name != "" {
-		return errors.New("sonobuoy namespace already exists")
+		return errors.New("namespace already exists")
 	}
 
 	if r.dedicated {
+
 		log.Info("Ensuring proper node label for dedicated mode")
 		nodes, err := coreClient.Nodes().List(context.TODO(), metav1.ListOptions{
-			LabelSelector: dedicatedLabelKeyValue,
+			LabelSelector: pkg.DedicatedNodeRoleLabelSelector,
 		})
 		if err != nil {
 			return err
@@ -196,24 +196,65 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 		if nodes.Items != nil && len(nodes.Items) == 0 {
 			return errors.New("No nodes with role required for dedicated mode (node-role.kubernetes.io/tests)")
 		}
+
+		// Skip preflight checks and create namespace manually with Tolerations
+		tolerations, err := json.Marshal([]v1.Toleration{{
+			Key:      pkg.DedicatedNodeRoleLabel,
+			Operator: v1.TolerationOpExists,
+			Value:    "",
+			Effect:   v1.TaintEffectNoSchedule,
+		}})
+		if err != nil {
+			return err
+		}
+
+		namespace = &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: pkg.CertificationNamespace,
+				Annotations: map[string]string{
+					"scheduler.alpha.kubernetes.io/defaultTolerations": string(tolerations),
+					"openshift.io/node-selector":                       pkg.DedicatedNodeRoleLabelSelector,
+				},
+			},
+		}
+	} else {
+		namespace = &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: pkg.CertificationNamespace,
+			},
+		}
 	}
 
+	_, err = kclient.CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	// Create Sonobuoy ServiceAccount
+	serviceAccount := &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pkg.SonobuoyServiceAccountName,
+			Namespace: pkg.CertificationNamespace,
+			Labels: map[string]string{
+				"component": pkg.SonobuoyComponentLabelValue,
+			},
+		},
+	}
+	_, err = kclient.CoreV1().ServiceAccounts(pkg.CertificationNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
 	log.Info("Ensuring the tool will run in the privileged environment...")
-	// Configure SCC
+
 	anyuid := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: pkg.AnyUIDClusterRoleBinding,
+			Name: "system:openshift:scc:anyuid",
 		},
 		Subjects: []rbacv1.Subject{
 			{
-				Kind:     rbacv1.GroupKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     "system:authenticated",
-			},
-			{
-				Kind:     rbacv1.GroupKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     "system:serviceaccounts",
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      pkg.SonobuoyServiceAccountName,
+				Namespace: pkg.CertificationNamespace,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -225,18 +266,13 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 
 	privileged := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: pkg.PrivilegedClusterRoleBinding,
+			Name: "system:openshift:scc:privileged",
 		},
 		Subjects: []rbacv1.Subject{
 			{
-				Kind:     rbacv1.GroupKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     "system:authenticated",
-			},
-			{
-				Kind:     rbacv1.GroupKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     "system:serviceaccounts",
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      pkg.SonobuoyServiceAccountName,
+				Namespace: pkg.CertificationNamespace,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -262,43 +298,16 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 	return nil
 }
 
-func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.Interface) error {
-	var manifests []*manifest.Manifest
-	var namespace *v1.Namespace
-
-	if r.dedicated {
-		// Skip preflight checks and create namespace manually with Tolerations
-		tolerations, err := json.Marshal([]v1.Toleration{{
-			Key:      dedicatedLabelKey,
-			Operator: v1.TolerationOpExists,
-			Value:    "",
-			Effect:   v1.TaintEffectNoSchedule,
-		}})
-		if err != nil {
-			return err
-		}
-
-		namespace = &v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: pkg.CertificationNamespace,
-				Annotations: map[string]string{
-					"scheduler.alpha.kubernetes.io/defaultTolerations": string(tolerations),
-					"openshift.io/node-selector":                       dedicatedLabelKeyValue,
-				},
-			},
-		}
-	} else {
-		namespace = &v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: pkg.CertificationNamespace,
-			},
-		}
-	}
-
-	_, err := kclient.CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
+func (r *RunOptions) createConfigMap(kclient kubernetes.Interface, sclient sonobuoyclient.Interface, cm *v1.ConfigMap) error {
+	_, err := kclient.CoreV1().ConfigMaps(pkg.CertificationNamespace).Create(context.TODO(), cm, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.Interface) error {
+	var manifests []*manifest.Manifest
 
 	// Let Sonobuoy do some preflight checks before we run
 	errs := sclient.PreflightChecks(&sonobuoyclient.PreflightConfig{
@@ -315,7 +324,7 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 	}
 
 	// Create version information ConfigMap
-	configMap := &v1.ConfigMap{
+	if err := r.createConfigMap(kclient, sclient, &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pkg.VersionInfoConfigMapName,
 			Namespace: pkg.CertificationNamespace,
@@ -326,9 +335,20 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 			"sonobuoy-version": buildinfo.Version,
 			"sonobuoy-image":   r.sonobuoyImage,
 		},
+	}); err != nil {
+		return err
 	}
-	_, err = kclient.CoreV1().ConfigMaps(pkg.CertificationNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
-	if err != nil {
+
+	if err := r.createConfigMap(kclient, sclient, &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pkg.PluginsVarsConfigMapName,
+			Namespace: pkg.CertificationNamespace,
+		},
+		Data: map[string]string{
+			"run-mode":              r.mode,
+			"upgrade-target-images": r.upgradeImage,
+		},
+	}); err != nil {
 		return err
 	}
 
@@ -371,6 +391,9 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 	// Set aggregator deployment namespace
 	aggConfig.Namespace = pkg.CertificationNamespace
 
+	// aggConfig.Namespace = pkg.CertificationNamespace
+	aggConfig.ExistingServiceAccount = true
+
 	// Fill out the Run configuration
 	// mode := ""
 	// upgradeToImage := ""
@@ -393,7 +416,7 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 		},
 	}
 
-	err = sclient.Run(runConfig)
+	err := sclient.Run(runConfig)
 	return err
 }
 
