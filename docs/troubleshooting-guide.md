@@ -1,21 +1,20 @@
-# OPCT - Troubleshooting Guide
+# OpenShift Provider Certification Tool - Troubleshooting Guide
 
 - [Certification Failures](#review)
 - [Troubleshooting](#review-troubleshooting)
     - [Review Results Archive](#review-archive)
-    - [Do I Need a Dedicated Test Environment](#review-needed-dedicated)
     - [Cluster Failures](#review-cluster-failures)
 
 ## Certification Tests Failures <a name="review"></a>
 
-Under any type of certification test failure, it is recommended to recreate the cluster under test. The certification tests check cluster metrics and logs which are persisted and this could impact subsequent certification tests.
+Under any type of certification test failure, it is recommended to recreate the cluster under test.
+The certification tests check cluster metrics and logs which are persisted and this **will impact subsequent certification tests**.
 
-If you already know the reason for a test failure then resolve the problem and re-run the provider certification tool again so a new certification archive is created.
+If you already know the reason for a test failure then resolve the problem, re-install the cluster under test, and re-run the provider certification tool again so a new certification archive is created.
 
 If you are not sure why you have failed tests or if some of the tests fail intermittently, proceed with the troubleshooting steps below.
 
-> Note: When running the `preview` release of the certification tool, it's expected to have failed tests reported on the archive, we are working to improve the accuracy. If you are sure the failed tests reported on the archive are not related to your environment, feel free to contact your Red Hat partner to share the feedback.
-
+> Note: The certification tool is in constant development, and due to the dynamic of the e2e test, you may experience failed tests reported on the archive that could be a flake, we are working to improve the accuracy of the reports. If you are sure the failed tests reported on the archive are not related to your environment, feel free to contact your Red Hat partner to share the feedback.
 
 ## Troubleshooting <a name="review-troubleshooting"></a>
 
@@ -68,10 +67,6 @@ yq -r '.items[].items[].items[] | select (.status=="failed") | .name ' results/p
 ```bash
 yq -r '.items[].items[].items[] | select (.name=="[sig-arch] Monitor cluster while tests execute").details.failure ' results/plugins/openshift-kube-conformance/sonobuoy_results.yaml
 ```
-
-#### Do I Need a Dedicated Test Environment <a name="review-needed-dedicated"></a>
-
-When issues like this arise, you can see error events in the `openshift-provider-certification` namespace (`oc get events -n openshift-provider-certification`) or even missing plugin pods. Also, sometimes sonobuoy does not detect the issues ([SPLAT-524](https://issues.redhat.com/browse/SPLAT-524)) and the certification environment will run until the timeout, with unexpected failures.
 
 #### Cluster Failures <a name="review-cluster-failures"></a>
 

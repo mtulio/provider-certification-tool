@@ -45,8 +45,8 @@ The following conditions require new certification assets:
 
 ### Setting up local environment <a name="setup-install"></a>
 
-- Download the [OPCT](./user.md#install)
-- Download the [`omg`](https://github.com/kxr/o-must-gather)
+- Download the [openshift-provider-cert](./user.md#install): OpenShift Provider Certification tool
+- Download the [`omg`](https://github.com/kxr/o-must-gather): tool to analyse Must-gather archive
 
 ```bash
 pip3 install o-must-gather --user
@@ -56,7 +56,7 @@ pip3 install o-must-gather --user
 
 - Download the Baseline results from the <TBD>`quay.io/ocp-cert/baseline-results`
 
-> TODO: add the steps to pull and extract the results from the baseline repository
+> TODO: add the steps to pull and extract the results from the baseline repository (S3)
 
 - Download the suite test list for the version used by the partner
 
@@ -81,6 +81,7 @@ The steps below use the subcommand `process` to apply filters on the failed test
 The filters use only tests included in the respective suite, isolating from common failures identified on the Baseline results or Flakes from CI. To see more details about the filters, read the [dev documentation describing filters flow](./dev.md#dev-diagram-filters).
 
 Required to use this section:
+
 - OPCT CLI downloaded to the current directory
 - OpenShift e2e test suite exported to the current directory
 - Baseline results exported to the current directory
@@ -203,11 +204,7 @@ Considerations:
 - `${PLUGIN_NAME}`: currently these plugins names are valid: [`openshift-validated`, `kubernetes-conformance`]
 - `${INDEX}` is the simple index ordered by test name on the list
 
-> TODO: mention the spreadsheet `failures-index.xlsx` created. It can be used to take notes of what was already reviewed by each layer/stakeholder (partner, support, and engineering) reviewing the errors, and also to improve the communication between the parts. For example, the partner could provide that google sheet with notes to check what he already reviewed (as we [mrbraga and robert] do while reviewing, and submitting it). The support can keep that list updated sharing it with engineering, and so on.
-
 Example of files on the extracted directory:
-
-> Review if we need it
 
 ```bash
 $ tree processed/

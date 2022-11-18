@@ -17,11 +17,17 @@ If you have any questions you can:
 ## Provider Information
 
 - Provider Name:                # Example: MyCloud
-- OpenShift Version:            # Example: 4.11.4
 - Certification Type:           # Options: (Standard | Upgrade)
-- Environment Setup Topology:   # Options: (Standard | Dedicated)
+- OpenShift Version:            # Example: 4.11.4
+- OpenShift Topology:           # Example: Standard HA
 
 ## Review Checklist
+
+### Deployment Documentation
+
+- [ ] The Cluster Diagram has been added
+- [ ] The Cluster Installation steps have been added, including any Cloud-based resources (ex.: external Load Balancers)
+
 
 ### Compute
 
@@ -37,6 +43,7 @@ If you have any questions you can:
 ### Load Balancers
 
 Load Balancer deployment:
+
 - [ ] I am using one Load Balancer dedicated to API
 - [ ] I am using one Load Balancer dedicated to Ingress
 - [ ] I am using the same Load Balancer for API and Ingress
@@ -45,6 +52,7 @@ Load Balancer deployment:
 - Load Balancer flavor/type used by Ingress:
 
 API Load Balancer details:
+
 - [ ] I have reviewed all the Health Check requirements
 - [ ] The Health Checks for kube-apiserver listeners are HTTP or HTTPS
 - [ ] The DNS `api-int.<cluster>.<domain>` is properly configured with **private** Load Balancer address
@@ -59,16 +67,14 @@ API Load Balancer details:
 #### etcd
 
 - [ ] I have checked the etcd logs while running the certification tool
-
-> TODO: provide an example of how to check it. (link to the "Installation Review" document)
-
 - [ ] I ran the etcd performance tool to measure the performance of the disk used by the mount point used by etcd(`/var/lib/etcd`) and it reported below than 10 ms (milliseconds).
 
 *See more at [User Installation Review > Components > etcd](./user-installation-review.md#components-etcd)*
 
 #### image-registry
 
-- Persistent storage used on the internal image registry: 
+- [ ] The persistent storage has been set to the Image Registry
+- Describe the name of the persistent storage used on the internal image registry:
 
 - [ ] I can push the image to the registry
 - [ ] I can pull images from the registry

@@ -71,16 +71,18 @@ The kube-apiserver has a graceful termination engine that requires the Load Bala
 
 Reminder for the API Load Balancer Health Check:
 
-*"The load balancer must be configured to take a maximum of 30 seconds from the time the API server turns off the /readyz endpoint to the removal of the API server instance from the pool. Within the time frame after /readyz returns an error or becomes healthy, the endpoint must have been removed or added. Probing every 5 or 10 seconds, with two successful requests to become healthy and three to become unhealthy, are well-tested values."*
+*"The load balancer must be configured to take a maximum of 30 seconds from the time the API server turns off the /readyz endpoint to the removal of the API server instance from the pool. Within the time frame after /readyz returns an error or becomes healthy, the endpoint must have been removed or added. Probing every 5 or 10 seconds, with two successful requests to become healthy and three to become unhealthy, are well-tested values."* [Load balancing requirements for user-provisioned infrastructure](https://docs.openshift.com/container-platform/4.11/installing/installing_platform_agnostic/installing-platform-agnostic.html#installation-load-balancing-user-infra_installing-platform-agnostic)
 
 
 ### Review Hairpin Traffic <a name="loadbalancers-hairpin"></a>
 
-If the Load Balancer does not allow hairpin traffic to the node, when a backend is load-balanced to itself and the traffic is dropped, you need to provide a solution.
+Hairpin traffic is when a backend node's traffic is load-balanced to itself. If this type of network traffic is dropped because your load balancer does not allow hairpin traffic, you need to provide a solution.
 
-On the integrated clouds that do not support Hairpin traffic, the OpenShift provides the static pod to redirect traffic destined for the lb VIP back to the node on the kube-apiserver.
+On the integrated clouds that do not support hairpin traffic, OpenShift provides a static pod to redirect traffic destined for the load balancer VIP back to the node on the kube-apiserver.
 
 For Reference:
+
+> This is not a recommendation, any solution provided by you will not be supported by Red Hat.
 
 - [Static pods to redirect hairpin traffic for Azure](https://github.com/openshift/machine-config-operator/blob/master/templates/master/00-master/azure/files/opt-libexec-openshift-azure-routes-sh.yaml)
 - [Static pods to redirect hairpin traffic for AlibabaCloud](https://github.com/openshift/machine-config-operator/tree/master/templates/master/00-master/alibabacloud)
@@ -100,10 +102,10 @@ Steps to reproduce the Hairpin traffic to a node:
 
 Review etcd's disk speed requirements:
 
-- https://etcd.io/docs/v3.5/op-guide/hardware/
-- https://docs.openshift.com/container-platform/4.11/scalability_and_performance/planning-your-environment-according-to-object-maximums.html
-- https://www.ibm.com/cloud/blog/using-fio-to-tell-whether-your-storage-is-fast-enough-for-etcd
-- Backend Performance Requirements for OpenShift etcd: https://access.redhat.com/solutions/4770281
+- [etcd: Hardware recommendations](https://etcd.io/docs/v3.5/op-guide/hardware/)
+- [OpenShift Docs: Planning your environment according to object maximums](https://docs.openshift.com/container-platform/4.11/scalability_and_performance/planning-your-environment-according-to-object-maximums.html)
+- [OpenShift KCS: Backend Performance Requirements for OpenShift etcd](https://access.redhat.com/solutions/4770281)
+- [IBM: Using Fio to Tell Whether Your Storage is Fast Enough for Etcd](https://www.ibm.com/cloud/blog/using-fio-to-tell-whether-your-storage-is-fast-enough-for-etcd)
 
 #### Review disk performance with etcd-fio <a name="components-etcd-ocp-fio"></a>
 
@@ -127,7 +129,7 @@ This section provides a guide to check the etcd slow requests from the logs on t
 
 The steps below use a utility `insights-ocp-etcd-logs` to parse the logs, aggregate the requests into buckets of 100ms from 200ms to 1s and report it on the stdout.
 
-This is the utility to help you to troubleshoot the slow requests in your cluster, and help to take some decisions like changing the flavor of the block device used by the control plane, increasing IOPS, changing the flavor of the instances, etc.
+This is the utility to help you to troubleshoot the slow requests in your cluster, and help make some decisions like changing the flavor of the block device used by the control plane, increasing IOPS, changing the flavor of the instances, etc.
 
 There's no magic or desired number, but for reference, based on the observations from integrated platforms, is to have no more than 30-40% of requests above 500ms while running the certification tests.
 
@@ -144,8 +146,7 @@ export MUST_GATHER_PATH=${PWD}/must-gather.local.2905984348081335046
 > This binary will be available when this card will be completed: https://issues.redhat.com/browse/SPLAT-857
 
 ```bash
-TOOLS_IMAGE=$(skopeo inspect docker://quay.io/ocp-cert/tools:latest | jq .Digest)
-oc image extract ${TOOLS_IMAGE} --file="/usr/bin/insights-ocp-etcd-logs"
+oc image extract quay.io/ocp-cert/tools:latest --file="/usr/bin/insights-ocp-etcd-logs"
 chmod u+x insights-ocp-etcd-logs
 ```
 
@@ -153,7 +154,7 @@ chmod u+x insights-ocp-etcd-logs
 
 > Note: This report can not be usefull depending how old is the logs. We recommend looking at the next report which aggregates by the hour, so you can check the time frame the certification has been executed
 
-> More information about the utility: https://issues.redhat.com/browse/SPLAT-857
+> This utility will be updated to simpligy the steps. The work can be tracked on https://issues.redhat.com/browse/SPLAT-857
 
 ```bash
 grep -rni "apply request took too long" ${MUST_GATHER_PATH} \
@@ -164,6 +165,8 @@ grep -rni "apply request took too long" ${MUST_GATHER_PATH} \
 ```
 
 - Report aggregated by hour:
+
+> This utility will be updated to simpligy the steps. The work can be tracked on https://issues.redhat.com/browse/SPLAT-857
 
 ```bash
 FILTER_MSG="apply request took too long"
@@ -182,7 +185,7 @@ for TS in $( grep -rni "${FILTER_MSG}" ${MUST_GATHER_PATH} \
 done
 ```
 
-#### Mount /var/lib/etcd in sepparate disk <a name="components-etcd-mount"></a>
+#### Mount /var/lib/etcd in separate disk <a name="components-etcd-mount"></a>
 
 One way to improve the performance on etcd is to use a dedicated block device.
 
@@ -193,7 +196,7 @@ You can mount `/var/lib/etcd` by following the documentation:
 
 ### Image Registry <a name="components-imageregistry"></a>
 
-You should be able to access the registry and make sure you can push and pull images on it.
+You should be able to access the registry and make sure you can push and pull images on it, otherwise, the e2e tests will be reported as failed.
 
 Please check the OpenShift documentation to validate it:
 
@@ -205,7 +208,3 @@ You can also explore the OpenShift sample projects that create PVC and BuildConf
 ```bash
 oc new-app nodejs-postgresql-persistent
 ```
-
-<!-- ## <Open>
-
-> Question: Anything else related to provider review findings that must be checked before submitting the results? -->
