@@ -254,5 +254,5 @@ Items to review:
 Additional items to review:
 
 - explore the must-gather objects according to findings on the failures files
-- run insights rules on the must-gather to check if there's a new know issue
+- run insights rules on the must-gather to check if there's a new know issue: `insights run -p ccx_rules_ocp ${MUST_GATHER_PATH}`
 > TODO: provide steps to install and run insight OCP rules (opct could provide one container with it installed to avoid overhead and environment issues)
