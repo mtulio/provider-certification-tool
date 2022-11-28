@@ -11,8 +11,8 @@ Table Of Contents:
 - [Process](#process)
 - [Prerequisites](#prerequisites)
     - [Standard Environment](#standard-env)
-    - [Dedicated test Environment](#dedicated-env)
-        - [Environment Setup](#dedicated-env-setup)
+        - [Environment Setup](#standard-env-setup)
+    - [Development Environment](#development-env)
     - [Privilege Requirements](#priv-requirements)
 - [Install](#install)
     - [Prebuilt Binary](#install-bin)
@@ -45,22 +45,7 @@ A Red Hat OpenShift 4 cluster must be [installed](https://docs.openshift.com/con
 
 ### Standard Environment <a name="standard-env"></a>
 
-A standard machine layout can be used for certification. If you run into issues with pod disruption (eviction, OOM, frequent crashes, etc) then you may want to consider the Dedicated Test Environment configuration further below. Below is a table of the minimum resource requirements for the OpenShift cluster under test:
-
-| Machine       | Count | CPU | RAM (GB) | Storage (GB) |
-| ------------- | ----- | --- | -------- | ------------ |
-| Bootstrap     | 1     | 4   | 16       | 100          |
-| Control Plane | 3     | 4   | 16       | 100          |
-| Compute       | 3     | 4   | 16       | 100          |
-
-
-*Note: These requirements are higher than the [minimum requirements](https://docs.openshift.com/container-platform/latest/installing/installing_bare_metal/installing-bare-metal.html#installation-minimum-resource-requirements_installing-bare-metal) in OpenShift product documentation due to the resource demand of the certification tests.*
-
-### Dedicated Node for Test Environment <a name="dedicated-env"></a>
-
-If your compute nodes are at or below minimum requirements, it is recommended to run the certification environment on one dedicated node to avoid disruption of the test scheduler. Otherwise, the concurrency between resources scheduled on the cluster, e2e-test manager (aka openshift-tests-plugin), and other stacks like monitoring can disrupt the test environment, leading to unexpected results, like the eviction of plugins or certification server (sonobuoy pod).
-
-See the troubleshooting section on ways to identify you might need to use a dedicated node test environment below.
+A dedicated compute node should be used to avoid disruption of the test scheduler. Otherwise, the concurrency between resources scheduled on the cluster, e2e-test manager (aka openshift-tests-plugin), and other stacks like monitoring can disrupt the test environment, leading to unexpected results, like the eviction of plugins or certification server (sonobuoy pod).
 
 The dedicated node environment cluster size can be adjusted to match the table below. Note the differences in the `Dedicated Test` machine:
 
@@ -71,7 +56,9 @@ The dedicated node environment cluster size can be adjusted to match the table b
 | Compute       | 3     | 4   | 16       | 100          |
 | Dedicated Test| 1     | 4   | 8        | 100          |
 
-#### Environment Setup <a name="dedicated-env-setup"></a>
+*Note: These requirements are higher than the [minimum requirements](https://docs.openshift.com/container-platform/latest/installing/installing_bare_metal/installing-bare-metal.html#installation-minimum-resource-requirements_installing-bare-metal) in OpenShift product documentation due to the resource demand of the certification tests.*
+
+#### Environment Setup <a name="standard-env-setup"></a>
 
 1. Choose one node with at least 8GiB of RAM and 4 vCPU
 2. Label node with `node-role.kubernetes.io/tests=""` (certification-related pods will schedule to dedicated node)
@@ -81,14 +68,14 @@ The dedicated node environment cluster size can be adjusted to match the table b
 
 There are two options to accomplish this type of setup:
 
-##### Option A: Command Line 
+##### Option A: Command Line
 
 ```shell
 oc label node <node_name> node-role.kubernetes.io/tests=""
 oc adm taint node <node_name> node-role.kubernetes.io/tests="":NoSchedule
 ```
 
-##### Option B: Machine Set 
+##### Option B: Machine Set
 
 If you have support for OpenShift's Machine API then you can create a new `MachineSet` to configure the labels and taints. See [OpenShift documentation](https://docs.openshift.com/container-platform/latest/machine_management/creating-infrastructure-machinesets.html#binding-infra-node-workloads-using-taints-tolerations_creating-infrastructure-machinesets) on how to configure a new `MachineSet`. Note that at the time of certification testing, OpenShift's product documentation may not mention your infrastructure provider yet!
 
@@ -103,6 +90,15 @@ Here is a `MachineSet` YAML snippet on how to configure the label and taint as w
           effect: NoSchedule
 ```
 
+### Development Environment <a name="development-env"></a>
+
+If you wish to run the certification tool in a smaller OpenShift environment for test or development purposes, you may run it like below, disabling dedicated mode:
+
+```shell
+openshift-provider-cert run --dedicated false
+```
+
+Keep in mind that you may run into resource constraint issues using fewer resources than defined in the standard method above. 
 
 ### Privilege Requirements <a name="priv-requirements"></a>
 
@@ -204,7 +200,7 @@ You will need to destroy the OpenShift cluster under test separately.
 
 Check also the documents below that might help while investigating the results and failures of the Provider Certification process:
 
-- [Troubleshooring Guide](./troubleshooting-guide.md)
+- [Troubleshooting Guide](./troubleshooting-guide.md)
 - [Installation Review](./user-installation-review.md)
 
 ## Feedback <a name="feedback"></a>
