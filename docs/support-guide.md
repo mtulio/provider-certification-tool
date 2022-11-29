@@ -5,7 +5,7 @@
     - [New Executions](#check-list-new-executions)
 - [Setting up the Review Environment](#setup)
     - [Install tools](#setup-install)
-    - [Download dependencies](#setup-download-dependencies)
+    - [Download dependencies](#setup-download-baseline)
     - [Download Partner Results](#setup-download-results)
 - [Review guide: exploring the failed tests](#review-process)
     - [Exploring the failures](#review-process-exploring)
@@ -43,21 +43,42 @@ The following conditions require new certification assets:
 
 ## Review Environment <a name="setup"></a>
 
-### Setting up local environment <a name="setup-install"></a>
+### Install Tools <a name="setup-install"></a>
 
 - Download the [openshift-provider-cert](./user.md#install): OpenShift Provider Certification tool
 - Download the [`omg`](https://github.com/kxr/o-must-gather): tool to analyse Must-gather archive
-
 ```bash
 pip3 install o-must-gather --user
 ```
+- Download the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) or another tool to pull from AWS S3
 
-### Download dependencies <a name="setup-download-dependencies"></a>
+### Download Baseline CI results <a name="setup-download-baseline"></a>
 
-- Download the Baseline results from the <TBD>`quay.io/ocp-cert/baseline-results`
+The Openshift provider certification tool is run periodically ([source code](https://github.com/openshift/release/blob/master/ci-operator/jobs/redhat-openshift-ecosystem/provider-certification-tool/redhat-openshift-ecosystem-provider-certification-tool-main-periodics.yaml)) in OpenShift CI using the latest stable release of OpenShift. These baseline results are stored long-term in an AWS S3 bucket (`s3://openshift-provider-certification/baseline-results`). These baseline results should be used as a reference when reviewing a partner's certification results.
 
-> TODO: add the steps to pull and extract the results from the baseline repository (S3)
+You will need and AWS Access Key/ID for the `openshift-dev` AWS account in order to download from the S3 bucket.
 
+1. Identify cluster version in the partner's must gather:
+```bash
+$ omg get clusterversion
+NAME     VERSION  AVAILABLE  PROGRESSING  SINCE  STATUS
+version  4.11.13   True       False        11h    Cluster version is 4.11.13
+```
+2. List all versions from the S3 bucket containing baseline certification results:
+```bash
+$ aws s3 ls s3://openshift-provider-certification/baseline-results/ | grep 4.11.13
+2022-11-24 17:38:30   69644276 4.11.13-20221125.tar.gz
+```
+3. Download the *latest* test results for the version (bottom of list):
+```bash
+$ aws s3 cp s3://openshift-provider-certification/baseline-results/4.11.13-20221125.tar.gz  .
+download: s3://openshift-provider-certification/baseline-results/4.11.13-20221125.tar.gz to ./4.11.13-20221125.tar.gz
+
+$ file 4.11.13-20221125.tar.gz 
+4.11.13-20221125.tar.gz: gzip compressed data, original size modulo 2^32 430269440
+```
+
+4. Proceed with comparing baseline results with actual provider results.
 - Download the suite test list for the version used by the partner
 
 ```bash
