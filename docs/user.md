@@ -12,7 +12,6 @@ Table Of Contents:
 - [Prerequisites](#prerequisites)
     - [Standard Environment](#standard-env)
         - [Environment Setup](#standard-env-setup)
-    - [Development Environment](#development-env)
     - [Privilege Requirements](#priv-requirements)
 - [Install](#install)
     - [Prebuilt Binary](#install-bin)
@@ -89,16 +88,6 @@ Here is a `MachineSet` YAML snippet on how to configure the label and taint as w
         - key: node-role.kubernetes.io/tests
           effect: NoSchedule
 ```
-
-### Development Environment <a name="development-env"></a>
-
-If you wish to run the certification tool in a smaller OpenShift environment for test or development purposes, you may run it like below, disabling dedicated mode:
-
-```shell
-openshift-provider-cert run --dedicated false
-```
-
-Keep in mind that you may run into resource constraint issues using fewer resources than defined in the standard method above. 
 
 ### Privilege Requirements <a name="priv-requirements"></a>
 
