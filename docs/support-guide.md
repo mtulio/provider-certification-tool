@@ -57,8 +57,6 @@ The Openshift provider certification tool is run periodically ([source code](htt
 These baseline results are stored long-term in an AWS S3 bucket (`s3://openshift-provider-certification/baseline-results`). An HTML listing can be found here: https://openshift-provider-certification.s3.us-west-2.amazonaws.com/index.html.
 These baseline results should be used as a reference when reviewing a partner's certification results.
 
-You will need and AWS Access Key/ID for the `openshift-dev` AWS account in order to download from the S3 bucket.
-
 1. Identify cluster version in the partner's must gather:
 ```bash
 $ omg get clusterversion
