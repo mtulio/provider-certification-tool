@@ -45,7 +45,7 @@ A Red Hat OpenShift 4 cluster must be [installed](https://docs.openshift.com/con
 
 ### Standard Environment <a name="standard-env"></a>
 
-A dedicated compute node should be used to avoid disruption of the test scheduler. Otherwise, the concurrency between resources scheduled on the cluster, e2e-test manager (aka openshift-tests-plugin), and other stacks like monitoring can disrupt the test environment, leading to unexpected results, like the eviction of plugins or certification server (sonobuoy pod).
+A dedicated compute node should be used to avoid disruption of the test scheduler. Otherwise, the concurrency between resources scheduled on the cluster, e2e-test manager (aka openshift-tests-plugin), and other stacks like monitoring can disrupt the test environment, leading to unexpected results, like the eviction of plugins or aggregator server (`sonobuoy` pod).
 
 The dedicated node environment cluster size can be adjusted to match the table below. Note the differences in the `Dedicated Test` machine:
 
