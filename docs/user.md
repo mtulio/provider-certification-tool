@@ -56,7 +56,7 @@ The dedicated node environment cluster size can be adjusted to match the table b
 | Compute       | 3     | 4   | 16       | 100          |
 | Dedicated Test| 1     | 4   | 8        | 100          |
 
-*Note: These requirements are higher than the [minimum requirements](https://docs.openshift.com/container-platform/latest/installing/installing_bare_metal/installing-bare-metal.html#installation-minimum-resource-requirements_installing-bare-metal) in OpenShift product documentation due to the resource demand of the certification tests.*
+*Note: These requirements are higher than the [minimum requirements](https://docs.openshift.com/container-platform/latest/installing/installing_bare_metal/installing-bare-metal.html#installation-minimum-resource-requirements_installing-bare-metal) for a regular cluster (non-certification) in OpenShift product documentation due to the resource demand of the certification environment.*
 
 #### Environment Setup <a name="standard-env-setup"></a>
 
