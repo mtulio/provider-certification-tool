@@ -22,6 +22,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/kubernetes"
 
@@ -209,82 +210,96 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 				Annotations: map[string]string{
 					"scheduler.alpha.kubernetes.io/defaultTolerations": string(tolerations),
 					"openshift.io/node-selector":                       pkg.DedicatedNodeRoleLabelSelector,
+					"openshift.io/scc":                                 "privileged",
 				},
+				Labels: pkg.SonobuoyDefaultLabels,
 			},
 		}
 	} else {
 		namespace = &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: pkg.CertificationNamespace,
+				Name:   pkg.CertificationNamespace,
+				Labels: pkg.SonobuoyDefaultLabels,
 			},
 		}
 	}
 
 	_, err = kclient.CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error creating Namespace")
 	}
 
 	// Create Sonobuoy ServiceAccount
-	serviceAccount := &v1.ServiceAccount{
+	// https://github.com/vmware-tanzu/sonobuoy/blob/main/pkg/client/gen.go#L611-L616
+	sa := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pkg.SonobuoyServiceAccountName,
 			Namespace: pkg.CertificationNamespace,
-			Labels: map[string]string{
-				"component": pkg.SonobuoyComponentLabelValue,
-			},
+			Labels:    pkg.SonobuoyDefaultLabels,
 		},
 	}
-	_, err = kclient.CoreV1().ServiceAccounts(pkg.CertificationNamespace).Create(context.TODO(), serviceAccount, metav1.CreateOptions{})
+	sa.SetGroupVersionKind(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "ServiceAccount"})
+
+	_, err = kclient.CoreV1().ServiceAccounts(pkg.CertificationNamespace).Create(context.TODO(), sa, metav1.CreateOptions{})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error creating ServiceAccount")
 	}
 	log.Info("Ensuring the tool will run in the privileged environment...")
 
-	// Configure SCC
-	anyuid := &rbacv1.ClusterRoleBinding{
+	cr := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "system:openshift:scc:anyuid",
+			Name:      pkg.PrivilegedClusterRole,
+			Namespace: pkg.CertificationNamespace,
+			Labels:    pkg.SonobuoyDefaultLabels,
 		},
-		Subjects: []rbacv1.Subject{
+		Rules: []rbacv1.PolicyRule{
+			// {
+			// 	APIGroups:     []string{"security.openshift.io"},
+			// 	Resources:     []string{"securitycontextconstraints"},
+			// 	ResourceNames: []string{"privileged"},
+			// 	Verbs:         []string{"use"},
+			// },
 			{
-				Kind:     rbacv1.ServiceAccountKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     pkg.SonobuoyServiceAccountName,
+				APIGroups: []string{"*"},
+				Resources: []string{"*"},
+				Verbs:     []string{"*"},
+			},
+			{
+				NonResourceURLs: []string{"/metrics", "/logs", "/logs/*"},
+				Verbs:           []string{"get"},
 			},
 		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name:     "system:openshift:scc:anyuid",
-		},
 	}
+	cr.SetGroupVersionKind(schema.GroupVersionKind{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "ClusterRole"})
 
-	privileged := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "system:openshift:scc:privileged",
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:     rbacv1.ServiceAccountKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     pkg.SonobuoyServiceAccountName,
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name:     "system:openshift:scc:privileged",
-		},
-	}
-
-	_, err = rbacClient.ClusterRoleBindings().Update(context.TODO(), anyuid, metav1.UpdateOptions{})
+	_, err = rbacClient.ClusterRoles().Update(context.TODO(), cr, metav1.UpdateOptions{})
 	if err != nil {
-		return errors.Wrap(err, "error creating anyuid ClusterRoleBinding")
+		return errors.Wrap(err, "error creating privileged ClusterRole")
 	}
-	log.Infof("Created %s ClusterRoleBinding", pkg.AnyUIDClusterRoleBinding)
+	log.Infof("Created %s ClusterRole", pkg.PrivilegedClusterRole)
 
-	_, err = rbacClient.ClusterRoleBindings().Update(context.TODO(), privileged, metav1.UpdateOptions{})
+	crb := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pkg.PrivilegedClusterRoleBinding,
+			Namespace: pkg.CertificationNamespace,
+			Labels:    pkg.SonobuoyDefaultLabels,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      pkg.SonobuoyServiceAccountName,
+				Namespace: pkg.CertificationNamespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     pkg.PrivilegedClusterRole,
+		},
+	}
+	crb.SetGroupVersionKind(schema.GroupVersionKind{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "ClusterRoleBinding"})
+
+	_, err = rbacClient.ClusterRoleBindings().Update(context.TODO(), crb, metav1.UpdateOptions{})
 	if err != nil {
 		return errors.Wrap(err, "error creating privileged ClusterRoleBinding")
 	}
@@ -370,12 +385,19 @@ func (r *RunOptions) Run(kclient kubernetes.Interface, sclient sonobuoyclient.In
 
 	// Ignore Existing SA created on preflight
 	aggConfig.ExistingServiceAccount = true
+	aggConfig.ServiceAccountName = pkg.SonobuoyServiceAccountName
+
+	// Trying to run privileged
+	// https://github.com/vmware-tanzu/sonobuoy/blob/main/pkg/client/gen.go
+	// aggConfig.SecurityContextMode = "none"
 
 	// Fill out the Run configuration
 	runConfig := &sonobuoyclient.RunConfig{
 		GenConfig: sonobuoyclient.GenConfig{
-			Config:             aggConfig,
-			EnableRBAC:         true, // True because OpenShift uses RBAC
+			Config: aggConfig,
+			// Prevent geenerate CR (as it is generated above) https://github.com/vmware-tanzu/sonobuoy/blob/main/pkg/client/gen.go#L589-L604
+			// Prevent to leak the CR/CRB sonobuoy-serviceaccount-provider-certification
+			EnableRBAC:         false,
 			ImagePullPolicy:    config.DefaultSonobuoyPullPolicy,
 			StaticPlugins:      manifests,
 			PluginEnvOverrides: nil, // TODO We'll use this later

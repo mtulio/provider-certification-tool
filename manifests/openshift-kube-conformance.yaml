@@ -6,7 +6,7 @@ podSpec:
       emptyDir: {}
   containers:
     - name: report-progress
-      image: quay.io/ocp-cert/openshift-tests-provider-cert:v0.2.0
+      image: quay.io/ocp-cert/openshift-tests-provider-cert:v0.2.1
       imagePullPolicy: Always
       priorityClassName: system-node-critical
       command: ["./report-progress.sh"]
@@ -15,6 +15,8 @@ podSpec:
         name: results
       - mountPath: /tmp/shared
         name: shared
+      # securityContext:
+      #   privileged: true
       env:
         - name: PLUGIN_ID
           value: "10"
@@ -39,7 +41,7 @@ sonobuoy-config:
   skipCleanup: true
 spec:
   name: plugin
-  image: quay.io/ocp-cert/openshift-tests-provider-cert:v0.2.0
+  image: quay.io/ocp-cert/openshift-tests-provider-cert:v0.2.1
   imagePullPolicy: Always
   priorityClassName: system-node-critical
   volumeMounts:
@@ -47,6 +49,8 @@ spec:
     name: results
   - mountPath: /tmp/shared
     name: shared
+  # securityContext:
+  #   privileged: true
   env:
     - name: PLUGIN_ID
       value: "10"
