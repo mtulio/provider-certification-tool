@@ -5,19 +5,26 @@ import (
 )
 
 const (
-	CertPluginNameKubernetesConformance = "openshift-kube-conformance"
-	CertPluginNameOpenshiftValidated    = "openshift-conformance-validated"
+	PluginNameOpenShiftUpgrade      = "05-openshift-cluster-upgrade"
+	PluginNameKubernetesConformance = "10-openshift-kube-conformance"
+	PluginNameOpenShiftConformance  = "20-openshift-conformance-validated"
+	PluginNameArtifactsCollector    = "99-openshift-artifacts-collector"
+
+	// Old Plugin names (prior v0.2). It's used to keep compatibility
+	PluginOldNameKubernetesConformance = "openshift-kube-conformance"
+	PluginOldNameOpenShiftConformance  = "openshift-conformance-validated"
 )
 
 // OPCT
 type OPCTPluginSummary struct {
-	Name    string
-	Status  string
-	Total   int64
-	Passed  int64
-	Failed  int64
-	Timeout int64
-	Skipped int64
+	Name      string
+	NameAlias string
+	Status    string
+	Total     int64
+	Passed    int64
+	Failed    int64
+	Timeout   int64
+	Skipped   int64
 
 	// FailedItems is the map with details for each failure
 	FailedItems map[string]*PluginFailedItem

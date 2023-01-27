@@ -32,6 +32,8 @@ type SummaryClusterOperatorOutput struct {
 	CountDegraded    uint64
 }
 
+type SummaryOpenShiftInfrastructureV1 = configv1.Infrastructure
+
 func NewOpenShiftSummary() *OpenShiftSummary {
 	return &OpenShiftSummary{}
 }
@@ -44,7 +46,10 @@ func (os *OpenShiftSummary) SetInfrastructure(cr *configv1.InfrastructureList) e
 	return nil
 }
 
-func (os *OpenShiftSummary) GetInfrastructure() (*configv1.Infrastructure, error) {
+func (os *OpenShiftSummary) GetInfrastructure() (*SummaryOpenShiftInfrastructureV1, error) {
+	if os.Infrastructure == nil {
+		return &SummaryOpenShiftInfrastructureV1{}, nil
+	}
 	return os.Infrastructure, nil
 }
 
@@ -57,6 +62,9 @@ func (os *OpenShiftSummary) SetClusterVersion(cr *configv1.ClusterVersionList) e
 }
 
 func (os *OpenShiftSummary) GetClusterVersion() (*SummaryClusterVersionOutput, error) {
+	if os.ClusterVersion == nil {
+		return &SummaryClusterVersionOutput{}, nil
+	}
 	resp := SummaryClusterVersionOutput{
 		DesiredVersion: os.ClusterVersion.Status.Desired.Version,
 	}
@@ -100,9 +108,18 @@ func (os *OpenShiftSummary) GetClusterOperator() (*SummaryClusterOperatorOutput,
 
 func (os *OpenShiftSummary) SetPluginResult(in *OPCTPluginSummary) error {
 	switch in.Name {
-	case CertPluginNameKubernetesConformance:
+	case PluginNameKubernetesConformance:
 		os.PluginResultK8sConformance = in
-	case CertPluginNameOpenshiftValidated:
+	case PluginOldNameKubernetesConformance:
+		in.NameAlias = in.Name
+		in.Name = PluginNameKubernetesConformance
+		os.PluginResultK8sConformance = in
+
+	case PluginNameOpenShiftConformance:
+		os.PluginResultOCPValidated = in
+	case PluginOldNameOpenShiftConformance:
+		in.NameAlias = in.Name
+		in.Name = PluginOldNameOpenShiftConformance
 		os.PluginResultOCPValidated = in
 	default:
 		return fmt.Errorf("unable to Set Plugin results: Plugin not found: %s", in.Name)

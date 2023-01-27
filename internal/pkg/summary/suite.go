@@ -1,8 +1,7 @@
 package summary
 
 import (
-	log "github.com/sirupsen/logrus"
-	"os"
+	"bytes"
 	"strings"
 )
 
@@ -14,18 +13,6 @@ const (
 type OpenshiftTestsSuites struct {
 	KubernetesConformance *OpenshiftTestsSuite
 	OpenshiftConformance  *OpenshiftTestsSuite
-}
-
-func (ts *OpenshiftTestsSuites) LoadAll() error {
-	err := ts.OpenshiftConformance.Load()
-	if err != nil {
-		return err
-	}
-	err = ts.KubernetesConformance.Load()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (ts *OpenshiftTestsSuites) GetTotalOCP() int {
@@ -43,14 +30,15 @@ type OpenshiftTestsSuite struct {
 	Tests     []string
 }
 
-func (s *OpenshiftTestsSuite) Load() error {
-	content, err := os.ReadFile(s.InputFile)
-	if err != nil {
-		log.Fatal(err)
-		return err
+func (s *OpenshiftTestsSuite) Load(ifile string, buf *bytes.Buffer) error {
+	var e2e []string
+	for _, m := range strings.Split(buf.String(), "\n") {
+		if m != "" {
+			e2e = append(e2e, m)
+		}
 	}
-
-	s.Tests = strings.Split(string(content), "\n")
+	s.InputFile = ifile
+	s.Tests = e2e
 	s.Count = len(s.Tests)
 	return nil
 }

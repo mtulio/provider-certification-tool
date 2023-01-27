@@ -1,11 +1,13 @@
 package summary
 
 import (
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/vmware-tanzu/sonobuoy/pkg/client/results"
@@ -13,28 +15,50 @@ import (
 )
 
 const (
+	ResultSourceNameProvider = "provider"
+	ResultSourceNameBaseline = "baseline"
+
 	// OpenShift Custom Resources locations on archive file
-	resourceInfrastructuresPath  = "resources/cluster/config.openshift.io_v1_infrastructures.json"
-	resourceClusterVersionsPath  = "resources/cluster/config.openshift.io_v1_clusterversions.json"
-	resourceClusterOperatorsPath = "resources/cluster/config.openshift.io_v1_clusteroperators.json"
+	pathResourceInfrastructures  = "resources/cluster/config.openshift.io_v1_infrastructures.json"
+	pathResourceClusterVersions  = "resources/cluster/config.openshift.io_v1_clusterversions.json"
+	pathResourceClusterOperators = "resources/cluster/config.openshift.io_v1_clusteroperators.json"
+	pathPluginArtifactTestsK8S   = "plugins/99-openshift-artifacts-collector/results/global/artifacts_e2e-tests_kubernetes-conformance.txt"
+	pathPluginArtifactTestsOCP   = "plugins/99-openshift-artifacts-collector/results/global/artifacts_e2e-tests_openshift-conformance.txt"
 )
 
-// ResultSummary holds the summary of a single execution
+// ResultSummary persists the reference of resulta archive
 type ResultSummary struct {
 	Name      string
 	Archive   string
 	Sonobuoy  *SonobuoySummary
 	OpenShift *OpenShiftSummary
+	Suites    *OpenshiftTestsSuites
 	reader    *results.Reader
 }
 
-// Populate eentry point to process the results into the summary structure.
+// HasValidResults checks if the result instance has valid archive to be processed,
+// returning true if it's valid.
+// Invalid results happens when the baseline archive was not set on the CLI arguments,
+// making the 'process' command to ignore the comparisons and filters related.
+func (rs *ResultSummary) HasValidResults() bool {
+	if rs.Archive == "" && rs.Name == ResultSourceNameBaseline {
+		return false
+	}
+	return true
+}
+
+// Populate open the archive and process the files to populate the summary structures.
 func (rs *ResultSummary) Populate() error {
+
+	if !rs.HasValidResults() {
+		log.Warnf("Ignoring to populate empty file [%s] for source '%s'", rs.Archive, rs.Name)
+		return nil
+	}
 
 	cleanup, err := rs.openReader()
 	defer cleanup()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "unable to open reader for file '%s'", rs.Archive)
 	}
 
 	// Report on all plugins or the specified one.
@@ -48,6 +72,12 @@ func (rs *ResultSummary) Populate() error {
 
 	var lastErr error
 	for _, plugin := range plugins {
+		log.Infof("Processing Plugin %s...\n", plugin)
+		switch plugin {
+		case PluginNameOpenShiftUpgrade, PluginNameArtifactsCollector:
+			log.Infof("Ignoring Plugin %s", plugin)
+			continue
+		}
 		err := rs.processPlugin(plugin)
 		if err != nil {
 			lastErr = err
@@ -69,16 +99,33 @@ func (rs *ResultSummary) Populate() error {
 	return lastErr
 }
 
+// GetOpenShift returns the OpenShift objects parsed from results
 func (rs *ResultSummary) GetOpenShift() *OpenShiftSummary {
+	if !rs.HasValidResults() {
+		return &OpenShiftSummary{}
+	}
 	return rs.OpenShift
 }
 
+// GetSonobuoy returns the Sonobuoy objects parsed from results
 func (rs *ResultSummary) GetSonobuoy() *SonobuoySummary {
+	if !rs.HasValidResults() {
+		return &SonobuoySummary{}
+	}
 	return rs.Sonobuoy
 }
 
+// GetSonobuoyCluster returns the SonobuoyCluster object parsed from results
 func (rs *ResultSummary) GetSonobuoyCluster() *discovery.ClusterSummary {
+	if !rs.HasValidResults() {
+		return &discovery.ClusterSummary{}
+	}
 	return rs.Sonobuoy.Cluster
+}
+
+// GetSuites returns the Conformance suites collected from results
+func (rs *ResultSummary) GetSuites() *OpenshiftTestsSuites {
+	return rs.Suites
 }
 
 // getPluginList extract the plugin list from the archive reader.
@@ -200,6 +247,8 @@ func (rs *ResultSummary) processPluginResult(obj *results.Item) error {
 // information to the ResultSummary.
 func (rs *ResultSummary) populateSummary() error {
 
+	var bugSuiteK8S bytes.Buffer
+	var bugSuiteOCP bytes.Buffer
 	sbCluster := discovery.ClusterSummary{}
 	ocpInfra := configv1.InfrastructureList{}
 	ocpCV := configv1.ClusterVersionList{}
@@ -207,22 +256,25 @@ func (rs *ResultSummary) populateSummary() error {
 
 	// For summary and dump views, get the item as an object to iterate over.
 	err := rs.reader.WalkFiles(func(path string, info os.FileInfo, err error) error {
-
-		err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &sbCluster)
-		if err != nil {
+		if err = results.ExtractFileIntoStruct(results.ClusterHealthFilePath(), path, info, &sbCluster); err != nil {
 			return err
 		}
-		err = results.ExtractFileIntoStruct(resourceInfrastructuresPath, path, info, &ocpInfra)
-		if err != nil {
+		if err = results.ExtractFileIntoStruct(pathResourceInfrastructures, path, info, &ocpInfra); err != nil {
 			return err
 		}
-		err = results.ExtractFileIntoStruct(resourceClusterVersionsPath, path, info, &ocpCV)
-		if err != nil {
+		if err = results.ExtractFileIntoStruct(pathResourceClusterVersions, path, info, &ocpCV); err != nil {
 			return err
 		}
-		err = results.ExtractFileIntoStruct(resourceClusterOperatorsPath, path, info, &ocpCO)
-		if err != nil {
+		if err = results.ExtractFileIntoStruct(pathResourceClusterOperators, path, info, &ocpCO); err != nil {
 			return err
+		}
+		if warn := results.ExtractBytes(pathPluginArtifactTestsK8S, path, info, &bugSuiteK8S); warn != nil {
+			log.Warnf("Unable to load file %s: %v\n", pathPluginArtifactTestsK8S, warn)
+			return warn
+		}
+		if warn := results.ExtractBytes(pathPluginArtifactTestsOCP, path, info, &bugSuiteOCP); warn != nil {
+			log.Warnf("Unable to load file %s: %v\n", pathPluginArtifactTestsOCP, warn)
+			return warn
 		}
 		return err
 	})
@@ -240,6 +292,12 @@ func (rs *ResultSummary) populateSummary() error {
 		return err
 	}
 	if err := rs.GetOpenShift().SetClusterOperator(&ocpCO); err != nil {
+		return err
+	}
+	if err := rs.Suites.KubernetesConformance.Load(pathPluginArtifactTestsK8S, &bugSuiteK8S); err != nil {
+		return err
+	}
+	if err := rs.Suites.OpenshiftConformance.Load(pathPluginArtifactTestsOCP, &bugSuiteOCP); err != nil {
 		return err
 	}
 
