@@ -8,9 +8,9 @@ import (
 )
 
 type OpenShiftSummary struct {
-	Infrastructure  *configv1.Infrastructure
-	ClusterVersion  *configv1.ClusterVersion
-	ClusterOperator *configv1.ClusterOperator
+	Infrastructure   *configv1.Infrastructure
+	ClusterVersion   *configv1.ClusterVersion
+	ClusterOperators *configv1.ClusterOperatorList
 
 	// Plugin Results
 	PluginResultK8sConformance *OPCTPluginSummary
@@ -77,29 +77,31 @@ func (os *OpenShiftSummary) GetClusterVersion() (*SummaryClusterVersionOutput, e
 	return &resp, nil
 }
 
-func (os *OpenShiftSummary) SetClusterOperator(cr *configv1.ClusterOperatorList) error {
+func (os *OpenShiftSummary) SetClusterOperators(cr *configv1.ClusterOperatorList) error {
 	if len(cr.Items) == 0 {
 		return errors.New("Unable to find result Items to set ClusterOperators")
 	}
-	os.ClusterOperator = &cr.Items[0]
+	os.ClusterOperators = cr
 	return nil
 }
 
 func (os *OpenShiftSummary) GetClusterOperator() (*SummaryClusterOperatorOutput, error) {
 	out := SummaryClusterOperatorOutput{}
-	for _, condition := range os.ClusterOperator.Status.Conditions {
-		switch condition.Type {
-		case configv1.OperatorAvailable:
-			if condition.Status == configv1.ConditionTrue {
-				out.CountAvailable += 1
-			}
-		case configv1.OperatorProgressing:
-			if condition.Status == configv1.ConditionTrue {
-				out.CountProgressing += 1
-			}
-		case configv1.OperatorDegraded:
-			if condition.Status == configv1.ConditionTrue {
-				out.CountDegraded += 1
+	for _, co := range os.ClusterOperators.Items {
+		for _, condition := range co.Status.Conditions {
+			switch condition.Type {
+			case configv1.OperatorAvailable:
+				if condition.Status == configv1.ConditionTrue {
+					out.CountAvailable += 1
+				}
+			case configv1.OperatorProgressing:
+				if condition.Status == configv1.ConditionTrue {
+					out.CountProgressing += 1
+				}
+			case configv1.OperatorDegraded:
+				if condition.Status == configv1.ConditionTrue {
+					out.CountDegraded += 1
+				}
 			}
 		}
 	}

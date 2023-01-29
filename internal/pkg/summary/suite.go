@@ -34,7 +34,7 @@ func (s *OpenshiftTestsSuite) Load(ifile string, buf *bytes.Buffer) error {
 	var e2e []string
 	for _, m := range strings.Split(buf.String(), "\n") {
 		if m != "" {
-			e2e = append(e2e, m)
+			e2e = append(e2e, strings.Trim(m, "\""))
 		}
 	}
 	s.InputFile = ifile

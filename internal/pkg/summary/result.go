@@ -24,6 +24,8 @@ const (
 	pathResourceClusterOperators = "resources/cluster/config.openshift.io_v1_clusteroperators.json"
 	pathPluginArtifactTestsK8S   = "plugins/99-openshift-artifacts-collector/results/global/artifacts_e2e-tests_kubernetes-conformance.txt"
 	pathPluginArtifactTestsOCP   = "plugins/99-openshift-artifacts-collector/results/global/artifacts_e2e-tests_openshift-conformance.txt"
+	// TODO: the following file is used to keep compatibility with versions older than v0.3
+	pathPluginArtifactTestsOCP2 = "plugins/99-openshift-artifacts-collector/results/global/artifacts_e2e-openshift-conformance.txt"
 )
 
 // ResultSummary persists the reference of resulta archive
@@ -51,7 +53,7 @@ func (rs *ResultSummary) HasValidResults() bool {
 func (rs *ResultSummary) Populate() error {
 
 	if !rs.HasValidResults() {
-		log.Warnf("Ignoring to populate empty file [%s] for source '%s'", rs.Archive, rs.Name)
+		log.Warnf("Ignoring to populate source '%s'. Missing or invalid baseline artifact (-b): %s", rs.Name, rs.Archive)
 		return nil
 	}
 
@@ -276,6 +278,10 @@ func (rs *ResultSummary) populateSummary() error {
 			log.Warnf("Unable to load file %s: %v\n", pathPluginArtifactTestsOCP, warn)
 			return warn
 		}
+		if warn := results.ExtractBytes(pathPluginArtifactTestsOCP2, path, info, &bugSuiteOCP); warn != nil {
+			log.Warnf("Unable to load file %s: %v\n", pathPluginArtifactTestsOCP2, warn)
+			return warn
+		}
 		return err
 	})
 	if err != nil {
@@ -291,7 +297,7 @@ func (rs *ResultSummary) populateSummary() error {
 	if err := rs.GetOpenShift().SetClusterVersion(&ocpCV); err != nil {
 		return err
 	}
-	if err := rs.GetOpenShift().SetClusterOperator(&ocpCO); err != nil {
+	if err := rs.GetOpenShift().SetClusterOperators(&ocpCO); err != nil {
 		return err
 	}
 	if err := rs.Suites.KubernetesConformance.Load(pathPluginArtifactTestsK8S, &bugSuiteK8S); err != nil {

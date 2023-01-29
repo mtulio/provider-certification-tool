@@ -81,15 +81,15 @@ func processResult(input *Input) error {
 		return err
 	}
 
-	if err := printAggregatedSummary(&cs); err != nil {
+	if err := showAggregatedSummary(&cs); err != nil {
 		return err
 	}
 
-	if err := printProcessedSummary(&cs); err != nil {
+	if err := showProcessedSummary(&cs); err != nil {
 		return err
 	}
 
-	if err := printErrorDetails(&cs, input.verbose); err != nil {
+	if err := showErrorDetails(&cs, input.verbose); err != nil {
 		return err
 	}
 
@@ -102,7 +102,7 @@ func processResult(input *Input) error {
 	return nil
 }
 
-func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
+func showAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
 
 	pOCP := cs.GetProvider().GetOpenShift()
@@ -112,8 +112,8 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	var bOCP *summary.OpenShiftSummary
 	var bOCPCV *summary.SummaryClusterVersionOutput
 	var bOCPInfra *summary.SummaryOpenShiftInfrastructureV1
-	baselineDefined := cs.GetBaseline().HasValidResults()
-	if baselineDefined {
+	baselineProcessed := cs.GetBaseline().HasValidResults()
+	if baselineProcessed {
 		bOCP = cs.GetBaseline().GetOpenShift()
 		bOCPCV, _ = bOCP.GetClusterVersion()
 		bOCPInfra, _ = bOCP.GetInfrastructure()
@@ -126,7 +126,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	newLineWithTab := "\t\t\n"
 	tbWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', tabwriter.AlignRight)
 
-	if baselineDefined {
+	if baselineProcessed {
 		fmt.Fprintf(tbWriter, " Kubernetes API Server version\t: %s\t: %s\n", pCL.APIVersion, bCL.APIVersion)
 		fmt.Fprintf(tbWriter, " OpenShift Container Platform version\t: %s\t: %s\n", pOCPCV.DesiredVersion, bOCPCV.DesiredVersion)
 		fmt.Fprintf(tbWriter, " - Cluster Update Progressing\t: %s\t: %s\n", pOCPCV.Progressing, bOCPCV.Progressing)
@@ -139,7 +139,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	}
 
 	fmt.Fprint(tbWriter, newLineWithTab)
-	if baselineDefined {
+	if baselineProcessed {
 		fmt.Fprintf(tbWriter, " OCP Infrastructure:\t\t\n")
 		fmt.Fprintf(tbWriter, " - PlatformType\t: %s\t: %s\n", pOCPInfra.Status.PlatformStatus.Type, bOCPInfra.Status.PlatformStatus.Type)
 		fmt.Fprintf(tbWriter, " - Name\t: %s\t: %s\n", pOCPInfra.Status.InfrastructureName, bOCPInfra.Status.InfrastructureName)
@@ -163,7 +163,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	plK8S := pOCP.GetResultK8SValidated()
 	name := plK8S.Name
 	pOCPPluginRes := fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plK8S.Status, plK8S.Total, plK8S.Passed, plK8S.Failed, plK8S.Skipped, plK8S.Timeout)
-	if baselineDefined {
+	if baselineProcessed {
 		plK8S = bOCP.GetResultK8SValidated()
 		bOCPPluginRes := fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plK8S.Status, plK8S.Total, plK8S.Passed, plK8S.Failed, plK8S.Skipped, plK8S.Timeout)
 		fmt.Fprintf(tbWriter, " - %s\t: %s\t: %s\n", name, pOCPPluginRes, bOCPPluginRes)
@@ -175,7 +175,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	name = plOCP.Name
 	pOCPPluginRes = fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plOCP.Status, plOCP.Total, plOCP.Passed, plOCP.Failed, plOCP.Skipped, plOCP.Timeout)
 
-	if baselineDefined {
+	if baselineProcessed {
 		plOCP = bOCP.GetResultOCPValidated()
 		bOCPPluginRes := fmt.Sprintf("%s [%d/%d/%d/%d] (%d)", plOCP.Status, plOCP.Total, plOCP.Passed, plOCP.Failed, plOCP.Skipped, plOCP.Timeout)
 		fmt.Fprintf(tbWriter, " - %s\t: %s\t: %s\n", name, pOCPPluginRes, bOCPPluginRes)
@@ -187,7 +187,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	fmt.Fprintf(tbWriter, " Health summary:\t  [A=True/P=True/D=True]\t\n")
 	pOCPCO, _ := pOCP.GetClusterOperator()
 
-	if baselineDefined {
+	if baselineProcessed {
 		bOCPCO, _ := bOCP.GetClusterOperator()
 		fmt.Fprintf(tbWriter, " - Cluster Operators\t: [%d/%d/%d]\t: [%d/%d/%d]\n",
 			pOCPCO.CountAvailable, pOCPCO.CountProgressing, pOCPCO.CountDegraded,
@@ -208,7 +208,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	if bCL.NodeHealth.Total != 0 {
 		bNhMessage = fmt.Sprintf("%s (%d%%)", bNhMessage, 100*bCL.NodeHealth.Healthy/bCL.NodeHealth.Total)
 	}
-	if baselineDefined {
+	if baselineProcessed {
 		fmt.Fprintf(tbWriter, " - Node health\t: %s\t: %s\n", pNhMessage, bNhMessage)
 	} else {
 		fmt.Fprintf(tbWriter, " - Node health\t: %s\n", pNhMessage)
@@ -223,7 +223,7 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 		}
 		pPodsHealthMsg = fmt.Sprintf("%d/%d %s", pCL.PodHealth.Healthy, pCL.PodHealth.Total, phTotal)
 	}
-	if baselineDefined {
+	if baselineProcessed {
 		if len(bCL.PodHealth.Details) > 0 {
 			phTotal := ""
 			if bCL.PodHealth.Total != 0 {
@@ -240,7 +240,23 @@ func printAggregatedSummary(cs *summary.ConsolidatedSummary) error {
 	return nil
 }
 
-func printSummaryPlugin(p *summary.OPCTPluginSummary) {
+func showProcessedSummary(cs *summary.ConsolidatedSummary) error {
+
+	fmt.Printf("\n> Processed Summary <\n")
+
+	fmt.Printf("\n Total tests by conformance suites:\n")
+	fmt.Printf(" - %s: %d \n", summary.SuiteNameKubernetesConformance, cs.GetProvider().GetSuites().GetTotalK8S())
+	fmt.Printf(" - %s: %d \n", summary.SuiteNameOpenshiftConformance, cs.GetProvider().GetSuites().GetTotalOCP())
+
+	fmt.Printf("\n Result Summary by conformance plugins:\n")
+	bProcessed := cs.GetBaseline().HasValidResults()
+	showSummaryPlugin(cs.GetProvider().GetOpenShift().GetResultK8SValidated(), bProcessed)
+	showSummaryPlugin(cs.GetProvider().GetOpenShift().GetResultOCPValidated(), bProcessed)
+
+	return nil
+}
+
+func showSummaryPlugin(p *summary.OPCTPluginSummary, bProcessed bool) {
 	fmt.Printf(" - %s:\n", p.Name)
 	fmt.Printf("   - Status: %s\n", p.Status)
 	fmt.Printf("   - Total: %d\n", p.Total)
@@ -250,31 +266,32 @@ func printSummaryPlugin(p *summary.OPCTPluginSummary) {
 	fmt.Printf("   - Skipped: %d\n", p.Skipped)
 	fmt.Printf("   - Failed (without filters) : %d\n", len(p.FailedList))
 	fmt.Printf("   - Failed (Filter SuiteOnly): %d\n", len(p.FailedFilterSuite))
-	fmt.Printf("   - Failed (Filter Baseline) : %d\n", len(p.FailedFilterBaseline))
-	fmt.Printf("   - Failed (Filter CI Flakes): %d\n", len(p.FailedFilterFlaky))
-	newStatus := p.Status
-	if len(p.FailedFilterFlaky) == 0 {
-		newStatus = "pass"
+	if bProcessed {
+		fmt.Printf("   - Failed (Filter Baseline) : %d\n", len(p.FailedFilterBaseline))
 	}
-	fmt.Printf("   - Status After Filters     : %s\n", newStatus)
+	fmt.Printf("   - Failed (Filter CI Flakes): %d\n", len(p.FailedFilterFlaky))
+
+	// rewrite the original status when pass on all filters
+	status := p.Status
+	if len(p.FailedFilterFlaky) == 0 {
+		status = "pass"
+	}
+	fmt.Printf("   - Status After Filters     : %s\n", status)
 }
 
-func printProcessedSummary(cs *summary.ConsolidatedSummary) error {
+// showErrorDetails show details of failres for each plugin.
+func showErrorDetails(cs *summary.ConsolidatedSummary, verbose bool) error {
 
-	fmt.Printf("\n> Processed Summary <\n")
-
-	fmt.Printf("\n Total Tests suites:\n")
-	fmt.Printf(" - %s: %d \n", summary.SuiteNameKubernetesConformance, cs.GetProvider().GetSuites().GetTotalK8S())
-	fmt.Printf(" - %s: %d \n", summary.SuiteNameOpenshiftConformance, cs.GetProvider().GetSuites().GetTotalOCP())
-
-	fmt.Printf("\n Total Tests by Certification Layer:\n")
-	printSummaryPlugin(cs.GetProvider().GetOpenShift().GetResultK8SValidated())
-	printSummaryPlugin(cs.GetProvider().GetOpenShift().GetResultOCPValidated())
+	fmt.Printf("\n Result details by conformance plugins: \n")
+	bProcessed := cs.GetBaseline().HasValidResults()
+	showErrorDetailPlugin(cs.GetProvider().GetOpenShift().GetResultK8SValidated(), verbose, bProcessed)
+	showErrorDetailPlugin(cs.GetProvider().GetOpenShift().GetResultOCPValidated(), verbose, bProcessed)
 
 	return nil
 }
 
-func printErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool) {
+// showErrorDetailPlugin Show failed e2e tests by filter, when verbose each filter will be shown.
+func showErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool, bProcessed bool) {
 
 	flakeCount := len(p.FailedFilterBaseline) - len(p.FailedFilterFlaky)
 
@@ -296,15 +313,15 @@ func printErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool) {
 		for _, test := range p.FailedFilterSuite {
 			fmt.Println(test)
 		}
-
-		fmt.Printf("\n --> [verbose] Failed tests removing baseline (Filter Baseline):\n")
-		if len(p.FailedFilterBaseline) == 0 {
-			fmt.Println("<empty>")
+		if bProcessed {
+			fmt.Printf("\n --> [verbose] Failed tests removing baseline (Filter Baseline):\n")
+			if len(p.FailedFilterBaseline) == 0 {
+				fmt.Println("<empty>")
+			}
+			for _, test := range p.FailedFilterBaseline {
+				fmt.Println(test)
+			}
 		}
-		for _, test := range p.FailedFilterBaseline {
-			fmt.Println(test)
-		}
-
 	} else {
 		fmt.Printf("\n\n => %s: (%d failures, %d flakes)\n", p.Name, len(p.FailedFilterBaseline), flakeCount)
 	}
@@ -335,13 +352,4 @@ func printErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool) {
 		}
 	}
 	tbWriter.Flush()
-}
-
-func printErrorDetails(cs *summary.ConsolidatedSummary, verbose bool) error {
-
-	fmt.Printf("\n Total Tests by Certification Layer: \n")
-	printErrorDetailPlugin(cs.GetProvider().GetOpenShift().GetResultK8SValidated(), verbose)
-	printErrorDetailPlugin(cs.GetProvider().GetOpenShift().GetResultOCPValidated(), verbose)
-
-	return nil
 }
