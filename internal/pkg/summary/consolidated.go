@@ -230,15 +230,20 @@ func (cs *ConsolidatedSummary) saveResultsPlugin(path, plugin string) error {
 	var resultsBaseline *OPCTPluginSummary
 	var suite *OpenshiftTestsSuite
 	var prefix = "tests"
+	bProcessed := cs.GetBaseline().HasValidResults()
 
 	switch plugin {
 	case PluginNameKubernetesConformance:
 		resultsProvider = cs.GetProvider().GetOpenShift().GetResultK8SValidated()
-		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultK8SValidated()
+		if bProcessed {
+			resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultK8SValidated()
+		}
 		suite = cs.GetProvider().GetSuites().KubernetesConformance
 	case PluginNameOpenShiftConformance:
 		resultsProvider = cs.GetProvider().GetOpenShift().GetResultOCPValidated()
-		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultOCPValidated()
+		if bProcessed {
+			resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultOCPValidated()
+		}
 		suite = cs.GetProvider().GetSuites().OpenshiftConformance
 	}
 
@@ -273,9 +278,11 @@ func (cs *ConsolidatedSummary) saveResultsPlugin(path, plugin string) error {
 	}
 
 	// Save baseline failures
-	filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, plugin)
-	if err := writeFileTestList(filename, resultsBaseline.FailedList); err != nil {
-		return err
+	if bProcessed {
+		filename = fmt.Sprintf("%s/%s_%s_baseline_failures.txt", path, prefix, plugin)
+		if err := writeFileTestList(filename, resultsBaseline.FailedList); err != nil {
+			return err
+		}
 	}
 
 	// Save the openshift-tests suite use by this plugin:
@@ -291,15 +298,20 @@ func (cs *ConsolidatedSummary) extractFailuresDetailsByPlugin(path, plugin strin
 
 	var resultsProvider *OPCTPluginSummary
 	var resultsBaseline *OPCTPluginSummary
+	bProcessed := cs.GetBaseline().HasValidResults()
 	ignoreExistingDir := true
 
 	switch plugin {
 	case PluginNameKubernetesConformance:
 		resultsProvider = cs.GetProvider().GetOpenShift().GetResultK8SValidated()
-		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultK8SValidated()
+		if bProcessed {
+			resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultK8SValidated()
+		}
 	case PluginNameOpenShiftConformance:
 		resultsProvider = cs.GetProvider().GetOpenShift().GetResultOCPValidated()
-		resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultOCPValidated()
+		if bProcessed {
+			resultsBaseline = cs.GetBaseline().GetOpenShift().GetResultOCPValidated()
+		}
 	}
 
 	currentDirectory := "failures-provider-filtered"
@@ -334,11 +346,13 @@ func (cs *ConsolidatedSummary) extractFailuresDetailsByPlugin(path, plugin strin
 		return err
 	}
 
-	subPrefix = fmt.Sprintf("%s/%s", subdir, plugin)
-	errItems = resultsBaseline.FailedItems
-	errList = resultsBaseline.FailedList
-	if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
-		return err
+	if bProcessed {
+		subPrefix = fmt.Sprintf("%s/%s", subdir, plugin)
+		errItems = resultsBaseline.FailedItems
+		errList = resultsBaseline.FailedList
+		if err := extractTestErrors(subPrefix, errItems, errList); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -348,7 +362,7 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 
 	var rowN int64
 	var errList []string
-
+	bProcessed := cs.GetBaseline().HasValidResults()
 	sheet := excelize.NewFile()
 	sheetFile := fmt.Sprintf("%s/failures-index.xlsx", path)
 	defer saveSheet(sheet, sheetFile)
@@ -379,18 +393,21 @@ func (cs *ConsolidatedSummary) saveFailuresIndexToSheet(path string) error {
 		populateSheet(sheet, sheetName, PluginNameOpenShiftConformance, errList, &rowN)
 	}
 
-	sheetName = "failures-baseline"
-	sheet.SetActiveSheet(sheet.NewSheet(sheetName))
-	if err := createSheet(sheet, sheetName); err != nil {
-		log.Error(err)
-	} else {
-		errList = cs.GetBaseline().GetOpenShift().GetResultK8SValidated().FailedList
-		rowN = 2
-		populateSheet(sheet, sheetName, PluginNameKubernetesConformance, errList, &rowN)
+	if bProcessed {
+		sheetName = "failures-baseline"
+		sheet.SetActiveSheet(sheet.NewSheet(sheetName))
+		if err := createSheet(sheet, sheetName); err != nil {
+			log.Error(err)
+		} else {
+			errList = cs.GetBaseline().GetOpenShift().GetResultK8SValidated().FailedList
+			rowN = 2
+			populateSheet(sheet, sheetName, PluginNameKubernetesConformance, errList, &rowN)
 
-		errList = cs.GetBaseline().GetOpenShift().GetResultOCPValidated().FailedList
-		populateSheet(sheet, sheetName, PluginNameOpenShiftConformance, errList, &rowN)
+			errList = cs.GetBaseline().GetOpenShift().GetResultOCPValidated().FailedList
+			populateSheet(sheet, sheetName, PluginNameOpenShiftConformance, errList, &rowN)
+		}
 	}
+
 	return nil
 }
 
