@@ -55,7 +55,7 @@ pip3 install o-must-gather --user
 ### Download Baseline CI results <a name="setup-download-baseline"></a>
 
 The Openshift provider certification tool is run periodically ([source code](https://github.com/openshift/release/blob/master/ci-operator/jobs/redhat-openshift-ecosystem/provider-certification-tool/redhat-openshift-ecosystem-provider-certification-tool-main-periodics.yaml)) in OpenShift CI using the latest stable release of OpenShift. 
-These baseline results are stored long-term in an AWS S3 bucket (`s3://openshift-provider-certification/baseline-results`). An HTML listing can be found here: https://openshift-provider-certification.s3.us-west-2.amazonaws.com/index.html.
+These baseline results are stored long-term in an AWS S3 bucket (`s3://openshift-provider-certification/baseline-results`). An HTML listing can be found [here](https://openshift-provider-certification.s3.us-west-2.amazonaws.com/index.html).
 These baseline results should be used as a reference when reviewing a partner's certification results.
 
 1. Identify cluster version in the partner's must gather:
@@ -70,18 +70,6 @@ version  4.11.13   True       False        11h    Cluster version is 4.11.13
 $ curl --output 4.11.13-20221125.tar.gz https://openshift-provider-certification.s3.us-west-2.amazonaws.com/baseline-results/4.11.13-20221125.tar.gz
 $ file 4.11.13-20221125.tar.gz 
 4.11.13-20221125.tar.gz: gzip compressed data, original size modulo 2^32 430269440
-```
-
-4. Proceed with comparing baseline results with actual provider results.
-- Download the suite test list for the version used by the partner
-
-```bash
-RELEASE_VERSION="4.11.4->CHANGE_ME"
-TESTS_IMG=$(oc adm release info ${RELEASE_VERSION} --image-for='tests')
-oc image extract ${TESTS_IMG} --file="/usr/bin/openshift-tests"
-chmod u+x ./openshift-tests
-./openshift-tests run --dry-run kubernetes/conformance > ./test-list_openshift-tests_kubernetes-conformance.txt
-./openshift-tests run --dry-run openshift/conformance > ./test-list_openshift-tests_openshift-validated.txt
 ```
 
 ### Download Partner Results <a name="setup-download-results"></a>
@@ -107,11 +95,11 @@ Required to use this section:
 
 Compare the provider results with the baseline:
 
+> `--baseline` is optional. You must use a trusted baseline results to apply the filters. Otherwise leave it unset.
+
 ```bash
 ./openshift-provider-cert-linux-amd64 process \
     --baseline ./opct_baseline-ocp_4.11.4-platform_none-provider-date_uuid.tar.gz \
-    --base-suite-ocp ./test-list_openshift-tests_openshift-validated.txt \
-    --base-suite-k8s ./test-list_openshift-tests_kubernetes-conformance.txt \
     ./<timestamp>_sonobuoy_<uuid>.tar.gz
 ```
 
@@ -122,9 +110,7 @@ Compare the results and extract the files (option `--save-to`) to the local dire
 ```bash
 ./openshift-provider-cert-linux-amd64 process \
     --baseline ./opct_baseline-ocp_4.11.4-platform_none-provider-date_uuid.tar.gz \
-    --base-suite-ocp ./test-list_openshift-tests_openshift-validated.txt \
-    --base-suite-k8s ./test-list_openshift-tests_kubernetes-conformance.txt \
-    --save-to processed \
+    --save-to ./results-provider-processed \
     ./<timestamp>_sonobuoy_<uuid>.tar.gz
 ```
 
@@ -194,10 +180,9 @@ Flakes  Perc   TestName
 32  4.848%  [sig-network][Feature:EgressFirewall] egressFirewall should have no impact outside its namespace [Suite:openshift/conformance/parallel]
 11  2.402%  [sig-network][Feature:EgressFirewall] when using openshift-sdn should ensure egressnetworkpolicy is created [Suite:openshift/conformance/parallel]
 
- Data Saved to directory './processed/'
+ Data Saved to directory './results-provider-processed'
 ```
 
-> TODO: create the index with a legend with references to the output.
 
 ### Understanding the extracted results <a name="review-process-explain"></a>
 
@@ -222,7 +207,7 @@ Considerations:
 Example of files on the extracted directory:
 
 ```bash
-$ tree processed/
+$ tree ./results-provider-processed
 processed/
 ├── failures-baseline
 [redacted]
