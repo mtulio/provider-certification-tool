@@ -1,4 +1,4 @@
-package process
+package report
 
 import (
 	"fmt"
@@ -20,11 +20,11 @@ type Input struct {
 	verbose     bool
 }
 
-func NewCmdProcess() *cobra.Command {
+func NewCmdReport() *cobra.Command {
 	data := Input{}
 	cmd := &cobra.Command{
-		Use:   "process archive.tar.gz",
-		Short: "Inspect plugin results.",
+		Use:   "report archive.tar.gz",
+		Short: "Create a report from results.",
 		Run: func(cmd *cobra.Command, args []string) {
 			data.archive = args[0]
 			if err := processResult(&data); err != nil {

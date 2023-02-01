@@ -79,7 +79,7 @@ $ file 4.11.13-20221125.tar.gz
 
 ## Review guide: exploring the failed tests <a name="review-process"></a>
 
-The steps below use the subcommand `process` to apply filters on the failed tests and help to keep the initial focus of the investigation on the failures exclusively on the partner's results.
+The steps below use the subcommand `report` to apply filters on the failed tests and help to keep the initial focus of the investigation on the failures exclusively on the partner's results.
 
 The filters use only tests included in the respective suite, isolating from common failures identified on the Baseline results or Flakes from CI. To see more details about the filters, read the [dev documentation describing filters flow](./dev.md#dev-diagram-filters).
 
@@ -98,7 +98,7 @@ Compare the provider results with the baseline:
 > `--baseline` is optional. You must use a trusted baseline results to apply the filters. Otherwise leave it unset.
 
 ```bash
-./openshift-provider-cert-linux-amd64 process \
+./openshift-provider-cert-linux-amd64 report \
     --baseline ./opct_baseline-ocp_4.11.4-platform_none-provider-date_uuid.tar.gz \
     ./<timestamp>_sonobuoy_<uuid>.tar.gz
 ```
@@ -108,7 +108,7 @@ Compare the provider results with the baseline:
 Compare the results and extract the files (option `--save-to`) to the local directory `./results-provider-processed`:
 
 ```bash
-./openshift-provider-cert-linux-amd64 process \
+./openshift-provider-cert-linux-amd64 report \
     --baseline ./opct_baseline-ocp_4.11.4-platform_none-provider-date_uuid.tar.gz \
     --save-to ./results-provider-processed \
     ./<timestamp>_sonobuoy_<uuid>.tar.gz
@@ -121,66 +121,98 @@ This is the expected output:
 ```bash
 (...Header...)
 
+$ $CLI_PATH/openshift-provider-cert-linux-amd64-process0 report 4.12.1-20230131.tar.gz --save-to  ./results-provider-processed
+INFO[2023-02-01T01:26:25-03:00] Processing Plugin 05-openshift-cluster-upgrade... 
+INFO[2023-02-01T01:26:25-03:00] Ignoring Plugin 05-openshift-cluster-upgrade 
+INFO[2023-02-01T01:26:25-03:00] Processing Plugin 10-openshift-kube-conformance... 
+INFO[2023-02-01T01:26:25-03:00] Processing Plugin 20-openshift-conformance-validated... 
+INFO[2023-02-01T01:26:26-03:00] Processing Plugin 99-openshift-artifacts-collector... 
+INFO[2023-02-01T01:26:26-03:00] Ignoring Plugin 99-openshift-artifacts-collector 
+WARN[2023-02-01T01:26:27-03:00] Ignoring to populate source 'baseline'. Missing or invalid baseline artifact (-b):  
+
+> OpenShift Provider Certification Summary <
+
+ Kubernetes API Server version		: v1.25.4+a34b9e9
+ OpenShift Container Platform version	: 4.12.1
+ - Cluster Update Progressing		: False
+ - Cluster Target Version		: Cluster version is 4.12.1
+						
+ OCP Infrastructure:			
+ - PlatformType				: None
+ - Name					: ci-op-nykh40v7-7280e-bsghd
+ - Topology				: HighlyAvailable
+ - ControlPlaneTopology			: HighlyAvailable
+ - API Server URL			: https://api.ci-op-nykh40v7-7280e.vmc-ci.devcluster.openshift.com:6443
+ - API Server URL (internal)		: https://api-int.ci-op-nykh40v7-7280e.vmc-ci.devcluster.openshift.com:6443
+						
+ Plugins summary by name:		  Status [Total/Passed/Failed/Skipped] (timeout)
+ - 10-openshift-kube-conformance	: failed [691/669/22/0] (0)
+ - 20-openshift-conformance-validated	: failed [3793/1627/52/2114] (0)
+									
+ Health summary:			  [A=True/P=True/D=True]	
+ - Cluster Operators			: [33/0/0]
+ - Node health				: 6/6  (100%)
+ - Pods health				: 250/258  (96%)
+
 > Processed Summary <
 
- Total Tests suites:
- - kubernetes/conformance: 353
- - openshift/conformance: 3488
+ Total tests by conformance suites:
+ - kubernetes/conformance: 359 
+ - openshift/conformance: 3454 
 
- Total Tests by Certification Layer:
- - openshift-kube-conformance:
+ Result Summary by conformance plugins:
+ - 10-openshift-kube-conformance:
    - Status: failed
-   - Total: 675
-   - Passed: 654
-   - Failed: 21
+   - Total: 691
+   - Passed: 669
+   - Failed: 22
    - Timeout: 0
    - Skipped: 0
-   - Failed (without filters) : 21
-   - Failed (Filter SuiteOnly): 2
-   - Failed (Filter Baseline  : 2
+   - Failed (without filters) : 22
+   - Failed (Filter SuiteOnly): 0
    - Failed (Filter CI Flakes): 0
    - Status After Filters     : pass
- - openshift-conformance-validated:
+ - 20-openshift-conformance-validated:
    - Status: failed
-   - Total: 3818
-   - Passed: 1708
-   - Failed: 61
+   - Total: 3793
+   - Passed: 1627
+   - Failed: 52
    - Timeout: 0
-   - Skipped: 2049
-   - Failed (without filters) : 61
-   - Failed (Filter SuiteOnly): 32
-   - Failed (Filter Baseline  : 7
-   - Failed (Filter CI Flakes): 2
+   - Skipped: 2114
+   - Failed (without filters) : 52
+   - Failed (Filter SuiteOnly): 22
+   - Failed (Filter CI Flakes): 3
    - Status After Filters     : failed
 
- Total Tests by Certification Layer: 
+ Result details by conformance plugins: 
 
- => openshift-kube-conformance: (2 failures, 2 flakes)
+
+ => 10-openshift-kube-conformance: (0 failures, 0 flakes)
 
  --> Failed tests to Review (without flakes) - Immediate action:
 <empty>
 
  --> Failed flake tests - Statistic from OpenShift CI
-Flakes  Perc   TestName
-1 0.138%  [sig-api-machinery] CustomResourcePublishOpenAPI [Privileged:ClusterAdmin] works for multiple CRDs of same group and version but different kinds [Conformance] [Suite:openshift/conformance/parallel/minimal] [Suite:k8s]
-2 0.275%  [sig-api-machinery] ResourceQuota should create a ResourceQuota and capture the life of a secret. [Conformance] [Suite:openshift/conformance/parallel/minimal] [Suite:k8s]
+<empty>
 
 
- => openshift-conformance-validated: (7 failures, 5 flakes)
+ => 20-openshift-conformance-validated: (22 failures, 19 flakes)
 
  --> Failed tests to Review (without flakes) - Immediate action:
-[sig-network-edge][Feature:Idling] Unidling should handle many TCP connections by possibly dropping those over a certain bound [Serial] [Skipped:Network/OVNKubernetes] [Suite:openshift/conformance/serial]
-[sig-storage] CSI Volumes [Driver: csi-hostpath] [Testpattern: Dynamic PV (default fs)] provisioning should provision storage with pvc data source [Suite:openshift/conformance/parallel] [Suite:k8s]
+[sig-arch] Managed cluster should set requests but not limits [Suite:openshift/conformance/parallel]
+[sig-cli] oc basics can get version information from API [Suite:openshift/conformance/parallel]
+[sig-scheduling] SchedulerPriorities [Serial] PodTopologySpread Scoring validates pod should be preferably scheduled to node which makes the matching pods more evenly distributed [Suite:openshift/conformance/serial] [Suite:k8s]
 
  --> Failed flake tests - Statistic from OpenShift CI
-Flakes  Perc   TestName
-101 10.576% [sig-arch][bz-DNS][Late] Alerts alert/KubePodNotReady should not be at or above pending in ns/openshift-dns [Suite:openshift/conformance/parallel]
-67  7.016%  [sig-arch][bz-Routing][Late] Alerts alert/KubePodNotReady should not be at or above pending in ns/openshift-ingress [Suite:openshift/conformance/parallel]
-2   0.386%  [sig-imageregistry] Image registry should redirect on blob pull [Suite:openshift/conformance/parallel]
-32  4.848%  [sig-network][Feature:EgressFirewall] egressFirewall should have no impact outside its namespace [Suite:openshift/conformance/parallel]
-11  2.402%  [sig-network][Feature:EgressFirewall] when using openshift-sdn should ensure egressnetworkpolicy is created [Suite:openshift/conformance/parallel]
+Flakes	Perc		 TestName
+1	0.134%		[sig-api-machinery][Feature:APIServer] anonymous browsers should get a 403 from / [Suite:openshift/conformance/parallel]
+1	0.134%		[sig-arch] Managed cluster should ensure control plane pods do not run in best-effort QoS [Suite:openshift/conformance/parallel]
+748	100.000%	[sig-arch] Managed cluster should ensure platform components have system-* priority class associated [Suite:openshift/conformance/parallel]
+--	--		[sig-arch][Late] clients should not use APIs that are removed in upcoming releases [apigroup:config.openshift.io] [Suite:openshift/conformance/parallel]
+(...)
 
- Data Saved to directory './results-provider-processed'
+ Data Saved to directory './results-provider-processed/'
+
 ```
 
 

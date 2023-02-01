@@ -12,11 +12,11 @@ import (
 
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/assets"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/destroy"
+	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/report"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/retrieve"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/run"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/status"
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/version"
-	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/process"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -66,7 +66,7 @@ func init() {
 	rootCmd.AddCommand(run.NewCmdRun())
 	rootCmd.AddCommand(status.NewCmdStatus())
 	rootCmd.AddCommand(version.NewCmdVersion())
-	rootCmd.AddCommand(process.NewCmdProcess())
+	rootCmd.AddCommand(report.NewCmdReport())
 
 	// Link in child commands direct from Sonobuoy
 	rootCmd.AddCommand(app.NewSonobuoyCommand())
