@@ -40,6 +40,7 @@ type RunOptions struct {
 	timeout       int
 	watch         bool
 	devCount      string
+	devSkipCO     bool
 	mode          string
 	upgradeImage  string
 }
@@ -50,6 +51,7 @@ const (
 	defaultUpgradeImage      = ""
 	defaultDedicatedFlag     = true
 	defaultRunWatchFlag      = false
+	defaultDevSkipCO         = false
 )
 
 func newRunOptions() *RunOptions {
@@ -124,17 +126,19 @@ func NewCmdRun() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&o.dedicated, "dedicated", defaultDedicatedFlag, "Setup plugins to run in dedicated test environment.")
-	cmd.Flags().StringVar(&o.devCount, "dev-count", "0", "Developer Mode only: run small random set of tests. Default: 0 (disabled)")
 	cmd.Flags().StringVar(&o.mode, "mode", defaultRunMode, "Run mode: Availble: regular, upgrade")
 	cmd.Flags().StringVar(&o.upgradeImage, "upgrade-to-image", defaultUpgradeImage, "Target OpenShift Release Image. Example: oc adm release info 4.11.18 -o jsonpath={.image}")
 	cmd.Flags().StringArrayVar(o.plugins, "plugin", nil, "Override default conformance plugins to use. Can be used multiple times. (default plugins can be reviewed with assets subcommand)")
 	cmd.Flags().StringVar(&o.sonobuoyImage, "sonobuoy-image", fmt.Sprintf("quay.io/ocp-cert/sonobuoy:%s", buildinfo.Version), "Image override for the Sonobuoy worker and aggregator")
 	cmd.Flags().IntVar(&o.timeout, "timeout", defaultRunTimeoutSeconds, "Execution timeout in seconds")
 	cmd.Flags().BoolVarP(&o.watch, "watch", "w", defaultRunWatchFlag, "Keep watch status after running")
+	cmd.Flags().StringVar(&o.devCount, "dev-count", "0", "Developer Mode only: run small random set of tests. Default: 0 (disabled)")
+	cmd.Flags().BoolVar(&o.devSkipCO, "dev-skip-check-clusteroperators", defaultDevSkipCO, "Developer Mode only: Skip cluster operator healthy checks.")
 
 	// Hide dedicated flag since this is for development only
 	cmd.Flags().MarkHidden("dedicated")
 	cmd.Flags().MarkHidden("dev-count")
+	cmd.Flags().MarkHidden("dev-skip-check-clusteroperators")
 
 	return cmd
 }
@@ -155,12 +159,14 @@ func (r *RunOptions) PreRunCheck(kclient kubernetes.Interface) error {
 	}
 
 	// Check if Cluster Operators are stable
-	errs := checkClusterOperators(configClient)
-	if errs != nil {
-		for _, err := range errs {
-			log.Warn(err)
+	if !r.devSkipCO {
+		errs := checkClusterOperators(configClient)
+		if errs != nil {
+			for _, err := range errs {
+				log.Warn(err)
+			}
+			return errors.New("All Cluster Operators must be available, not progressing, and not degraded before certification can run")
 		}
-		return errors.New("All Cluster Operators must be available, not progressing, and not degraded before certification can run")
 	}
 
 	// Get ConfigV1 client for Cluster Operators
