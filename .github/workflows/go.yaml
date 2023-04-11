@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - release-*
+      - splat-181-added-platformExternalName*
   push:
     tags:
       - '*'
@@ -35,6 +36,6 @@ jobs:
         run: make vet
 
       - name: Run static code analysis
-        uses: dominikh/staticcheck-action@v1.2.0
+        uses: dominikh/staticcheck-action@v1.3.0
         with:
-          version: "2022.1.1"
+          version: "2022.1.3"
