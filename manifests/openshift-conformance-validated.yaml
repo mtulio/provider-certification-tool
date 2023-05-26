@@ -34,7 +34,7 @@ sonobuoy-config:
   driver: Job
   plugin-name: 20-openshift-conformance-validated
   result-format: junit
-  description: The end-to-end tests maintained by OpenShift to certify the Provider running the OpenShift Container Platform.
+  description: The end-to-end tests maintained by OpenShift to validate the Provider running the OpenShift Container Platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-validated.yaml
   skipCleanup: true
 spec:

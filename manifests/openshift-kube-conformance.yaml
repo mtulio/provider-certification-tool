@@ -34,7 +34,7 @@ sonobuoy-config:
   driver: Job
   plugin-name: 10-openshift-kube-conformance
   result-format: junit
-  description: The end-to-end tests maintained by Kubernetes to certify the platform.
+  description: The end-to-end tests maintained by Kubernetes to validate the platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-kube-conformance.yaml
   skipCleanup: true
 spec:

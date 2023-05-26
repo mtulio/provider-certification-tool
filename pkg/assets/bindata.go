@@ -2,6 +2,7 @@
 // sources:
 // manifests/openshift-artifacts-collector.yaml
 // manifests/openshift-cluster-upgrade.yaml
+// manifests/openshift-conformance-external.yaml
 // manifests/openshift-conformance-validated.yaml
 // manifests/openshift-kube-conformance.yaml
 package assets
@@ -188,7 +189,7 @@ sonobuoy-config:
   driver: Job
   plugin-name: 05-openshift-cluster-upgrade
   result-format: junit
-  description: The end-to-end tests maintained by OpenShift to certify the Provider running the OpenShift Container Platform.
+  description: The end-to-end tests maintained by OpenShift to validate the Provider running the OpenShift Container Platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-validated.yaml
   skipCleanup: true
 spec:
@@ -250,6 +251,115 @@ func manifestsOpenshiftClusterUpgradeYaml() (*asset, error) {
 	return a, nil
 }
 
+var _manifestsOpenshiftConformanceExternalYaml = []byte(`config-map:
+  platform-external-e2e-run.sh: |
+    # CHANGEME: Placeholder for running external e2e tests
+
+    # Results must be saved on the ${RESULTS_DIR}
+    pushd "${RESULTS_DIR}" || true
+    
+    # CHANGEME: copy files to this directory
+    echo "test e2e" > test-result.txt
+    
+    popd
+
+podSpec:
+  restartPolicy: Never
+  serviceAccountName: sonobuoy-serviceaccount
+  volumes:
+    - name: shared
+      emptyDir: {}
+  containers:
+    - name: report-progress
+      image: "{{ .PluginsImage }}"
+      imagePullPolicy: Always
+      priorityClassName: system-node-critical
+      command: ["./report-progress.sh"]
+      volumeMounts:
+      - mountPath: /tmp/sonobuoy/results
+        name: results
+      - mountPath: /tmp/shared
+        name: shared
+      env:
+        - name: PLUGIN_ID
+          value: "30"
+        - name: ENV_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: ENV_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ENV_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+sonobuoy-config:
+  driver: Job
+  plugin-name: 30-openshift-conformance-external
+  result-format: raw
+  description: The end-to-end tests maintained by OpenShift to validate the Provider running the OpenShift Container Platform.
+  source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-external.yaml
+  skipCleanup: true
+spec:
+  name: plugin
+  image: "{{ .PluginsImage }}"
+  imagePullPolicy: Always
+  priorityClassName: system-node-critical
+  volumeMounts:
+  - mountPath: /tmp/sonobuoy/results
+    name: results
+  - mountPath: /tmp/shared
+    name: shared
+  env:
+    - name: PLUGIN_ID
+      value: "30"
+    - name: ENV_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: ENV_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: ENV_POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: RUN_MODE
+      valueFrom:
+        configMapKeyRef:
+          name: plugins-config
+          key: run-mode
+    - name: DEV_MODE_COUNT
+      valueFrom:
+        configMapKeyRef:
+          name: plugins-config
+          key: dev-count
+    - name: MIRROR_IMAGE_REPOSITORY
+      valueFrom:
+        configMapKeyRef:
+          name: plugins-config
+          key: mirror-registry
+          optional: true
+`)
+
+func manifestsOpenshiftConformanceExternalYamlBytes() ([]byte, error) {
+	return _manifestsOpenshiftConformanceExternalYaml, nil
+}
+
+func manifestsOpenshiftConformanceExternalYaml() (*asset, error) {
+	bytes, err := manifestsOpenshiftConformanceExternalYamlBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "manifests/openshift-conformance-external.yaml", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 var _manifestsOpenshiftConformanceValidatedYaml = []byte(`podSpec:
   restartPolicy: Never
   serviceAccountName: sonobuoy-serviceaccount
@@ -286,7 +396,7 @@ sonobuoy-config:
   driver: Job
   plugin-name: 20-openshift-conformance-validated
   result-format: junit
-  description: The end-to-end tests maintained by OpenShift to certify the Provider running the OpenShift Container Platform.
+  description: The end-to-end tests maintained by OpenShift to validate the Provider running the OpenShift Container Platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-validated.yaml
   skipCleanup: true
 spec:
@@ -383,7 +493,7 @@ sonobuoy-config:
   driver: Job
   plugin-name: 10-openshift-kube-conformance
   result-format: junit
-  description: The end-to-end tests maintained by Kubernetes to certify the platform.
+  description: The end-to-end tests maintained by Kubernetes to validate the platform.
   source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-kube-conformance.yaml
   skipCleanup: true
 spec:
@@ -498,6 +608,7 @@ func AssetNames() []string {
 var _bindata = map[string]func() (*asset, error){
 	"manifests/openshift-artifacts-collector.yaml":   manifestsOpenshiftArtifactsCollectorYaml,
 	"manifests/openshift-cluster-upgrade.yaml":       manifestsOpenshiftClusterUpgradeYaml,
+	"manifests/openshift-conformance-external.yaml":  manifestsOpenshiftConformanceExternalYaml,
 	"manifests/openshift-conformance-validated.yaml": manifestsOpenshiftConformanceValidatedYaml,
 	"manifests/openshift-kube-conformance.yaml":      manifestsOpenshiftKubeConformanceYaml,
 }
@@ -546,6 +657,7 @@ var _bintree = &bintree{nil, map[string]*bintree{
 	"manifests": &bintree{nil, map[string]*bintree{
 		"openshift-artifacts-collector.yaml":   &bintree{manifestsOpenshiftArtifactsCollectorYaml, map[string]*bintree{}},
 		"openshift-cluster-upgrade.yaml":       &bintree{manifestsOpenshiftClusterUpgradeYaml, map[string]*bintree{}},
+		"openshift-conformance-external.yaml":  &bintree{manifestsOpenshiftConformanceExternalYaml, map[string]*bintree{}},
 		"openshift-conformance-validated.yaml": &bintree{manifestsOpenshiftConformanceValidatedYaml, map[string]*bintree{}},
 		"openshift-kube-conformance.yaml":      &bintree{manifestsOpenshiftKubeConformanceYaml, map[string]*bintree{}},
 	}},

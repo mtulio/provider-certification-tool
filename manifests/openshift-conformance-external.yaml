@@ -1,3 +1,15 @@
+config-map:
+  platform-external-e2e-run.sh: |
+    # CHANGEME: Placeholder for running external e2e tests
+
+    # Results must be saved on the ${RESULTS_DIR}
+    pushd "${RESULTS_DIR}" || true
+    
+    # CHANGEME: copy files to this directory
+    echo "test e2e" > test-result.txt
+    
+    popd
+
 podSpec:
   restartPolicy: Never
   serviceAccountName: sonobuoy-serviceaccount
@@ -17,7 +29,7 @@ podSpec:
         name: shared
       env:
         - name: PLUGIN_ID
-          value: "05"
+          value: "30"
         - name: ENV_NODE_NAME
           valueFrom:
             fieldRef:
@@ -32,10 +44,10 @@ podSpec:
               fieldPath: metadata.namespace
 sonobuoy-config:
   driver: Job
-  plugin-name: 05-openshift-cluster-upgrade
-  result-format: junit
+  plugin-name: 30-openshift-conformance-external
+  result-format: raw
   description: The end-to-end tests maintained by OpenShift to validate the Provider running the OpenShift Container Platform.
-  source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-validated.yaml
+  source-url: https://github.com/redhat-openshift-ecosystem/provider-certification-tool/blob/main/manifests/openshift-conformance-external.yaml
   skipCleanup: true
 spec:
   name: plugin
@@ -49,7 +61,7 @@ spec:
     name: shared
   env:
     - name: PLUGIN_ID
-      value: "05"
+      value: "30"
     - name: ENV_NODE_NAME
       valueFrom:
         fieldRef:
@@ -62,20 +74,19 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: metadata.namespace
-    - name: UPGRADE_RELEASES
-      valueFrom:
-        configMapKeyRef:
-          name: plugins-config
-          key: upgrade-target-images
     - name: RUN_MODE
       valueFrom:
         configMapKeyRef:
           name: plugins-config
           key: run-mode
+    - name: DEV_MODE_COUNT
+      valueFrom:
+        configMapKeyRef:
+          name: plugins-config
+          key: dev-count
     - name: MIRROR_IMAGE_REPOSITORY
       valueFrom:
         configMapKeyRef:
           name: plugins-config
           key: mirror-registry
           optional: true
-

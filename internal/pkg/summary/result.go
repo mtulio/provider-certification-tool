@@ -76,13 +76,13 @@ func (rs *ResultSummary) Populate() error {
 	for _, plugin := range plugins {
 		log.Infof("Processing Plugin %s...\n", plugin)
 		switch plugin {
-		case PluginNameOpenShiftUpgrade, PluginNameArtifactsCollector:
+		case PluginNameKubernetesConformance, PluginNameOpenShiftConformance:
+			err := rs.processPlugin(plugin)
+			if err != nil {
+				lastErr = err
+			}
+		default:
 			log.Infof("Ignoring Plugin %s", plugin)
-			continue
-		}
-		err := rs.processPlugin(plugin)
-		if err != nil {
-			lastErr = err
 		}
 	}
 
