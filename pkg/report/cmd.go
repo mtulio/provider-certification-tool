@@ -52,6 +52,7 @@ func NewCmdReport() *cobra.Command {
 	return cmd
 }
 
+// processResult reads the artifacts and show it as an report format.
 func processResult(input *Input) error {
 
 	cs := summary.ConsolidatedSummary{
@@ -279,7 +280,7 @@ func showSummaryPlugin(p *summary.OPCTPluginSummary, bProcessed bool) {
 	if bProcessed {
 		fmt.Printf("   - Failed (Filter Baseline) : %d\n", len(p.FailedFilterBaseline))
 	}
-	fmt.Printf("   - Failed (Filter CI Flakes): %d\n", len(p.FailedFilterFlaky))
+	fmt.Printf("   - Failed (Filter CI Flakes): %d\n", len(p.FailedFilterNotFlake))
 
 	// checking for runtime failure
 	runtimeFailed := false
@@ -289,7 +290,7 @@ func showSummaryPlugin(p *summary.OPCTPluginSummary, bProcessed bool) {
 
 	// rewrite the original status when pass on all filters and not failed on runtime
 	status := p.Status
-	if (len(p.FailedFilterFlaky) == 0) && !runtimeFailed {
+	if (len(p.FailedFilterNotFlake) == 0) && !runtimeFailed {
 		status = "pass"
 	}
 
@@ -310,7 +311,7 @@ func showErrorDetails(cs *summary.ConsolidatedSummary, verbose bool) error {
 // showErrorDetailPlugin Show failed e2e tests by filter, when verbose each filter will be shown.
 func showErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool, bProcessed bool) {
 
-	flakeCount := len(p.FailedFilterBaseline) - len(p.FailedFilterFlaky)
+	flakeCount := len(p.FailedFilterBaseline) - len(p.FailedFilterNotFlake)
 
 	if verbose {
 		fmt.Printf("\n\n => %s: (%d failures, %d failures filtered, %d flakes)\n", p.Name, len(p.FailedList), len(p.FailedFilterBaseline), flakeCount)
@@ -347,7 +348,7 @@ func showErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool, bProcesse
 	if len(p.FailedFilterBaseline) == flakeCount {
 		fmt.Println("<empty>")
 	}
-	for _, test := range p.FailedFilterFlaky {
+	for _, test := range p.FailedFilterNotFlake {
 		fmt.Println(test)
 	}
 
@@ -359,8 +360,19 @@ func showErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool, bProcesse
 	} else {
 		fmt.Fprintf(tbWriter, "Flakes\tPerc\t TestName\n")
 		for _, test := range p.FailedFilterBaseline {
-			// When the was issues to create the flaky item (network connectivity with Sippy API),
-			// fallback to '--' values.
+			// preventing duplication when flake tests was already listed.
+			isFlake := true
+			for _, testFK := range p.FailedFilterNotFlake {
+				if testFK == test {
+					isFlake = false
+					break
+				}
+			}
+			if !isFlake {
+				continue
+			}
+			// TODO: fix issues when retrieving flakes from Sippy API.
+			// Fallback to '--' when has issues.
 			if p.FailedItems[test].Flaky == nil {
 				fmt.Fprintf(tbWriter, "--\t--\t%s\n", test)
 			} else if p.FailedItems[test].Flaky.CurrentFlakes != 0 {

@@ -52,6 +52,11 @@ cross-build-darwin-arm64:
 linux-amd64-container: linux-amd64
 	podman build -t $(IMG):latest -f hack/Containerfile --build-arg=RELEASE_TAG=$(RELEASE_TAG) .
 
+# Publish devel binaries (non-official). Must be used only for troubleshooting in development/support.
+.PHONY: publish-amd64-devel
+publish-amd64-devel: linux-amd64
+	aws s3 cp ./opct-linux-amd64 s3://openshift-provider-certification/bin/opct-linux-amd64-devel
+
 .PHONY: test
 test:
 	go test ./...
