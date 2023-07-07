@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -104,7 +105,7 @@ func processResult(input *Input) error {
 }
 
 func showAggregatedSummary(cs *summary.ConsolidatedSummary) error {
-	fmt.Printf("\n> OpenShift Provider Certification Summary <\n\n")
+	fmt.Printf("\n> OPCT Summary <\n\n")
 
 	// vars starting with p* represents the 'partner' artifact
 	// vars starting with b* represents 'baseline' artifact
@@ -271,30 +272,37 @@ func showSummaryPlugin(p *summary.OPCTPluginSummary, bProcessed bool) {
 	fmt.Printf(" - %s:\n", p.Name)
 	fmt.Printf("   - Status: %s\n", p.Status)
 	fmt.Printf("   - Total: %d\n", p.Total)
-	fmt.Printf("   - Passed: %d\n", p.Passed)
-	fmt.Printf("   - Failed: %d\n", p.Failed)
-	fmt.Printf("   - Timeout: %d\n", p.Timeout)
-	fmt.Printf("   - Skipped: %d\n", p.Skipped)
-	fmt.Printf("   - Failed (without filters) : %d\n", len(p.FailedList))
-	fmt.Printf("   - Failed (Filter SuiteOnly): %d\n", len(p.FailedFilterSuite))
+	fmt.Printf("   - Passed: %s\n", calcPercStr(p.Passed, p.Total))
+	fmt.Printf("   - Failed: %s\n", calcPercStr(p.Failed, p.Total))
+	fmt.Printf("   - Timeout: %s\n", calcPercStr(p.Timeout, p.Total))
+	fmt.Printf("   - Skipped: %s\n", calcPercStr(p.Skipped, p.Total))
+	fmt.Printf("   - Failed (without filters) : %s\n", calcPercStr(int64(len(p.FailedList)), p.Total))
+	fmt.Printf("   - Failed (Filter SuiteOnly): %s\n", calcPercStr(int64(len(p.FailedFilterSuite)), p.Total))
 	if bProcessed {
-		fmt.Printf("   - Failed (Filter Baseline) : %d\n", len(p.FailedFilterBaseline))
+		fmt.Printf("   - Failed (Filter Baseline) : %s\n", calcPercStr(int64(len(p.FailedFilterBaseline)), p.Total))
 	}
-	fmt.Printf("   - Failed (Filter CI Flakes): %d\n", len(p.FailedFilterNotFlake))
+	fmt.Printf("   - Failed (Filter CI Flakes): %s\n", calcPercStr(int64(len(p.FailedFilterNotFlake)), p.Total))
 
-	// checking for runtime failure
-	runtimeFailed := false
-	if p.Total == p.Failed {
-		runtimeFailed = true
-	}
+	/*
+		// The Final result will be hidden (pass|fail) will be hiden for a while for those reasons:
+		// - OPCT was created to provide feeaback of conformance results, not a passing binary value. The numbers should be interpreted
+		// - Conformance results could have flakes or runtime failures which need to be investigated by executor
+		// - Force user/executor to review the results, and not only the summary.
 
-	// rewrite the original status when pass on all filters and not failed on runtime
-	status := p.Status
-	if (len(p.FailedFilterNotFlake) == 0) && !runtimeFailed {
-		status = "pass"
-	}
+		// checking for runtime failure
+		runtimeFailed := false
+		if p.Total == p.Failed {
+			runtimeFailed = true
+		}
 
-	fmt.Printf("   - Status After Filters     : %s\n", status)
+		// rewrite the original status when pass on all filters and not failed on runtime
+		status := p.Status
+		if (len(p.FailedFilterNotFlake) == 0) && !runtimeFailed {
+			status = "pass"
+		}
+
+		fmt.Printf("   - Status After Filters     : %s\n", status)
+	*/
 }
 
 // showErrorDetails show details of failres for each plugin.
@@ -345,11 +353,18 @@ func showErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool, bProcesse
 	}
 
 	fmt.Printf("\n --> Failed tests to Review (without flakes) - Immediate action:\n")
+	noFlakes := make(map[string]struct{})
 	if len(p.FailedFilterBaseline) == flakeCount {
 		fmt.Println("<empty>")
-	}
-	for _, test := range p.FailedFilterNotFlake {
-		fmt.Println(test)
+	} else { // TODO move to small functions
+		testTags := NewTestTagsEmpty(len(p.FailedFilterNotFlake))
+		for _, test := range p.FailedFilterNotFlake {
+			noFlakes[test] = struct{}{}
+			testTags.Add(&test)
+		}
+		// Failed tests grouped by tag (first value between '[]')
+		fmt.Printf("%s\n\n", testTags.ShowSorted())
+		fmt.Println(strings.Join(p.FailedFilterNotFlake[:], "\n"))
 	}
 
 	fmt.Printf("\n --> Failed flake tests - Statistic from OpenShift CI\n")
@@ -358,17 +373,11 @@ func showErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool, bProcesse
 	if len(p.FailedFilterBaseline) == 0 {
 		fmt.Fprintf(tbWriter, "<empty>\n")
 	} else {
+		testTags := NewTestTagsEmpty(len(p.FailedFilterBaseline))
 		fmt.Fprintf(tbWriter, "Flakes\tPerc\t TestName\n")
 		for _, test := range p.FailedFilterBaseline {
 			// preventing duplication when flake tests was already listed.
-			isFlake := true
-			for _, testFK := range p.FailedFilterNotFlake {
-				if testFK == test {
-					isFlake = false
-					break
-				}
-			}
-			if !isFlake {
+			if _, ok := noFlakes[test]; ok {
 				continue
 			}
 			// TODO: fix issues when retrieving flakes from Sippy API.
@@ -378,7 +387,14 @@ func showErrorDetailPlugin(p *summary.OPCTPluginSummary, verbose bool, bProcesse
 			} else if p.FailedItems[test].Flaky.CurrentFlakes != 0 {
 				fmt.Fprintf(tbWriter, "%d\t%.3f%%\t%s\n", p.FailedItems[test].Flaky.CurrentFlakes, p.FailedItems[test].Flaky.CurrentFlakePerc, test)
 			}
+			testTags.Add(&test)
 		}
+		fmt.Printf("%s\n\n", testTags.ShowSorted())
 	}
 	tbWriter.Flush()
+}
+
+// calcPercStr receives the numerator and denominator and return the numerator and percentage as string.
+func calcPercStr(num, den int64) string {
+	return fmt.Sprintf("%d (%.2f%%)", num, (float64(num)/float64(den))*100)
 }
