@@ -92,6 +92,7 @@ func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
 
 	e2eFailures := resultsProvider.FailedList
 	e2eSuite := pluginSuite.Tests
+	emptySuite := len(pluginSuite.Tests) == 0
 	hashSuite := make(map[string]struct{}, len(e2eSuite))
 
 	for _, v := range e2eSuite {
@@ -99,8 +100,13 @@ func (cs *ConsolidatedSummary) applyFilterSuiteForPlugin(plugin string) error {
 	}
 
 	for _, v := range e2eFailures {
-		if _, ok := hashSuite[v]; ok {
+		// move on the pipeline when the suite is empty.
+		if emptySuite {
 			resultsProvider.FailedFilterSuite = append(resultsProvider.FailedFilterSuite, v)
+		} else {
+			if _, ok := hashSuite[v]; ok {
+				resultsProvider.FailedFilterSuite = append(resultsProvider.FailedFilterSuite, v)
+			}
 		}
 	}
 	sort.Strings(resultsProvider.FailedFilterSuite)
@@ -194,7 +200,11 @@ func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
 
 	// TODO: define if we will check for flakes for all failures or only filtered
 	// Query Flaky only the FilteredBaseline to avoid many external queries.
-	api := sippy.NewSippyAPI()
+	ver, err := cs.GetProvider().GetOpenShift().GetClusterVersionXY()
+	if err != nil {
+		return errors.Errorf("Error getting cluster version: %v", err)
+	}
+	api := sippy.NewSippyAPI(ver)
 	for _, name := range ps.FailedFilterBaseline {
 
 		resp, err := api.QueryTests(&sippy.SippyTestsRequestInput{TestName: name})
@@ -212,15 +222,16 @@ func (cs *ConsolidatedSummary) applyFilterFlakyForPlugin(plugin string) error {
 				}
 			}
 
-			// Remove all flakes, regardless the percentage.
-			// TODO: Review checking flaky severity
-			if ps.FailedItems[name].Flaky.CurrentFlakes == 0 {
-				ps.FailedFilterFlaky = append(ps.FailedFilterFlaky, name)
+			// Applying flake filter by moving only non-flakes to the pipeline.
+			// The tests reporing lower than 5% of CurrentFlakePerc by Sippy are selected as non-flake.
+			// TODO: Review flake severity
+			if ps.FailedItems[name].Flaky.CurrentFlakePerc <= 5 {
+				ps.FailedFilterNotFlake = append(ps.FailedFilterNotFlake, name)
 			}
 		}
 	}
 
-	sort.Strings(ps.FailedFilterFlaky)
+	sort.Strings(ps.FailedFilterNotFlake)
 	return nil
 }
 
@@ -267,7 +278,7 @@ func (cs *ConsolidatedSummary) saveResultsPlugin(path, plugin string) error {
 
 	// Save Provider failures with filter: Flaky
 	filename = fmt.Sprintf("%s/%s_%s_provider_failures-4-filter3_without_flakes.txt", path, prefix, plugin)
-	if err := writeFileTestList(filename, resultsProvider.FailedFilterFlaky); err != nil {
+	if err := writeFileTestList(filename, resultsProvider.FailedFilterNotFlake); err != nil {
 		return err
 	}
 

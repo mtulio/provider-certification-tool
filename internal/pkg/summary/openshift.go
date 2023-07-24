@@ -2,11 +2,13 @@ package summary
 
 import (
 	"fmt"
+	"regexp"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/pkg/errors"
 )
 
+// OpenShiftSummary holds the data collected from artifacts related to OpenShift objects.
 type OpenShiftSummary struct {
 	Infrastructure   *configv1.Infrastructure
 	ClusterVersion   *configv1.ClusterVersion
@@ -75,6 +77,16 @@ func (os *OpenShiftSummary) GetClusterVersion() (*SummaryClusterVersionOutput, e
 		}
 	}
 	return &resp, nil
+}
+
+func (os *OpenShiftSummary) GetClusterVersionXY() (string, error) {
+	out, err := os.GetClusterVersion()
+	if err != nil {
+		return "", err
+	}
+	re := regexp.MustCompile(`^(\d+.\d+)`)
+	match := re.FindStringSubmatch(out.DesiredVersion)
+	return match[1], nil
 }
 
 func (os *OpenShiftSummary) SetClusterOperators(cr *configv1.ClusterOperatorList) error {

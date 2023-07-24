@@ -35,7 +35,7 @@ type OPCTPluginSummary struct {
 	// FailedFilterBaseline is the list of failures (A) excluding the baseline(B): A EXCLUDE B
 	FailedFilterBaseline []string
 	// FailedFilteFlaky is the list of failures with no Flakes on OpenShift CI
-	FailedFilterFlaky []string
+	FailedFilterNotFlake []string
 }
 
 type PluginFailedItem struct {
