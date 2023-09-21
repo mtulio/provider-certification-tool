@@ -1,6 +1,7 @@
 package retrieve
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -17,8 +18,16 @@ import (
 	"github.com/redhat-openshift-ecosystem/provider-certification-tool/pkg/status"
 )
 
+type RetrieveOptions struct {
+	Silent bool
+}
+
+var options RetrieveOptions
+
 func NewCmdRetrieve() *cobra.Command {
-	return &cobra.Command{
+	// opts := &RetrieveOptions{}
+
+	cmd := &cobra.Command{
 		Use:   "retrieve",
 		Args:  cobra.MaximumNArgs(1),
 		Short: "Collect results from certification environment",
@@ -55,16 +64,24 @@ func NewCmdRetrieve() *cobra.Command {
 				return
 			}
 
-			log.Info("Collecting results...")
+			if !options.Silent {
+				log.Info("Collecting results...")
+			}
 
 			if err := retrieveResultsRetry(sclient, destinationDirectory); err != nil {
 				log.Error(err)
 				return
 			}
 
-			log.Info("Use the results command to check the certification test summary or share the results archive with your Red Hat partner.")
+			if !options.Silent {
+				log.Info("Use the results command to check the certification test summary or share the results archive with your Red Hat partner.")
+			}
 		},
 	}
+
+	cmd.Flags().BoolVarP(&options.Silent, "silent", "s", false, "Run in silent mode, printing only the path to results.")
+
+	return cmd
 }
 
 func retrieveResultsRetry(sclient sonobuoyclient.Interface, destinationDirectory string) error {
@@ -77,7 +94,9 @@ func retrieveResultsRetry(sclient sonobuoyclient.Interface, destinationDirectory
 		if err != nil {
 			log.Warn(err)
 			if retries+1 < limit {
-				log.Warnf("Retrying retrieval %d more times", limit-retries)
+				if !options.Silent {
+					log.Warnf("Retrying retrieval %d more times", limit-retries)
+				}
 			}
 			time.Sleep(pause)
 			retries++
@@ -107,7 +126,11 @@ func retrieveResults(sclient sonobuoyclient.Interface, destinationDirectory stri
 
 	// Log the new files to stdout
 	for _, result := range results {
-		log.Infof("Results saved to %s", result)
+		if options.Silent {
+			fmt.Print(result)
+		} else {
+			log.Infof("Results saved to %s", result)
+		}
 	}
 
 	return nil
