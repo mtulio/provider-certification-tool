@@ -25,6 +25,7 @@ const (
 )
 
 type StatusOptions struct {
+	StartTime           time.Time
 	Latest              *aggregation.Status
 	watch               bool
 	shownPostProcessMsg bool
@@ -32,7 +33,8 @@ type StatusOptions struct {
 
 func NewStatusOptions(watch bool) *StatusOptions {
 	return &StatusOptions{
-		watch: watch,
+		watch:     watch,
+		StartTime: time.Now(),
 	}
 }
 
@@ -184,18 +186,18 @@ func (s *StatusOptions) Print(cmd *cobra.Command, sclient sonobuoyclient.Interfa
 func (s *StatusOptions) doPrint() (complete bool, err error) {
 	switch s.GetStatus() {
 	case aggregation.RunningStatus:
-		err := PrintRunningStatus(s.Latest)
+		err := PrintRunningStatus(s.Latest, s.StartTime)
 		if err != nil {
 			return false, err
 		}
 	case aggregation.PostProcessingStatus:
 		if !s.watch {
-			err := PrintRunningStatus(s.Latest)
+			err := PrintRunningStatus(s.Latest, s.StartTime)
 			if err != nil {
 				return false, err
 			}
 		} else if !s.shownPostProcessMsg {
-			err := PrintRunningStatus(s.Latest)
+			err := PrintRunningStatus(s.Latest, s.StartTime)
 			if err != nil {
 				return false, err
 			}
@@ -203,7 +205,7 @@ func (s *StatusOptions) doPrint() (complete bool, err error) {
 			s.shownPostProcessMsg = true
 		}
 	case aggregation.CompleteStatus:
-		err := PrintRunningStatus(s.Latest)
+		err := PrintRunningStatus(s.Latest, s.StartTime)
 		if err != nil {
 			return true, err
 		}
